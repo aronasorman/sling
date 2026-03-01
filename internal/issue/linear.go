@@ -48,7 +48,7 @@ query($id: String!) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", l.apiKey)
+	req.Header.Set("Authorization", "Bearer "+l.apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -44,7 +44,7 @@ func TestHasReviewMarkersStyles(t *testing.T) {
 	}
 	for _, marker := range markers {
 		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte(marker), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "file.go"), []byte(marker), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		got, err := HasReviewMarkers(dir)
