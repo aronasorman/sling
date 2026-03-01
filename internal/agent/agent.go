@@ -32,6 +32,8 @@ type RunOptions struct {
 	MaxTurns int
 	// Model to use (e.g. "claude-opus-4-6", "claude-sonnet-4-6").
 	Model string
+	// Env is a map of additional environment variables to set for the agent.
+	Env map[string]string
 }
 
 // Run executes the claude CLI with the given options.
@@ -59,6 +61,12 @@ func Run(opts RunOptions) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	if len(opts.Env) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range opts.Env {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
 
 	if err := cmd.Run(); err != nil {
 		if e, ok := err.(*exec.ExitError); ok {
@@ -130,9 +138,10 @@ func ExecutorSystemPrompt(beadTitle, beadBody, beadID string, contextFiles map[s
 	}
 
 	sb.WriteString("## FINAL STEP — MANDATORY\n\n")
-	sb.WriteString("After all code is written, tests pass, and changes are committed with jj:\n\n")
-	sb.WriteString("```bash\ntouch .sling-done\n```\n\n")
-	sb.WriteString("This is NOT optional. If you do not create this file, your work will be discarded and the bead will be retried.\n")
+	sb.WriteString("When all work is committed and tests pass, run:\n")
+	sb.WriteString("```\nsling signal-done <bead-id>\n```\n\n")
+	sb.WriteString("Replace <bead-id> with the actual bead ID passed in your context.\n")
+	sb.WriteString(fmt.Sprintf("The bead ID for this task is: %s\n", beadID))
 
 	return sb.String()
 }
