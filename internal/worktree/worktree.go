@@ -36,6 +36,7 @@ func WorktreePath(repoRoot, beadID string) string {
 }
 
 // Add creates a new jj workspace at the given path with a new branch named after beadID.
+// Idempotent: if the workspace already exists, it is reused.
 // repoRoot is the main jj repo directory.
 func Add(repoRoot, beadID string) (*Workspace, error) {
 	wtPath := WorktreePath(repoRoot, beadID)
@@ -45,14 +46,30 @@ func Add(repoRoot, beadID string) (*Workspace, error) {
 		return nil, fmt.Errorf("creating worktrees dir: %w", err)
 	}
 
-	// jj workspace add --name <beadID> <path>
-	if _, err := run(repoRoot, "workspace", "add", "--name", beadID, wtPath); err != nil {
-		return nil, fmt.Errorf("jj workspace add: %w", err)
+	// Check if workspace already exists (e.g. from a previous failed attempt).
+	existingWorkspaces, _ := run(repoRoot, "workspace", "list")
+	workspaceExists := strings.Contains(string(existingWorkspaces), beadID+":")
+	dirExists := func() bool { _, err := os.Stat(wtPath); return err == nil }()
+
+	if workspaceExists && !dirExists {
+		// Stale registration: forget and recreate.
+		_, _ = run(repoRoot, "workspace", "forget", beadID)
+		workspaceExists = false
 	}
 
-	// Create and set the branch in the new workspace.
-	if _, err := run(wtPath, "bookmark", "create", branch); err != nil {
-		return nil, fmt.Errorf("jj branch create: %w", err)
+	if !workspaceExists {
+		// jj workspace add --name <beadID> <path>
+		if _, err := run(repoRoot, "workspace", "add", "--name", beadID, wtPath); err != nil {
+			return nil, fmt.Errorf("jj workspace add: %w", err)
+		}
+	}
+
+	// Use bookmark set (idempotent) instead of create.
+	if _, err := run(wtPath, "bookmark", "set", branch, "-r", "@"); err != nil {
+		// Fallback: try create if set fails (older jj).
+		if _, err2 := run(wtPath, "bookmark", "create", branch); err2 != nil {
+			return nil, fmt.Errorf("jj branch create: %w", err)
+		}
 	}
 
 	return &Workspace{
