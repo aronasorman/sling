@@ -187,10 +187,12 @@ func HasReviewMarkers(dir string) (bool, error) {
 		if err != nil {
 			return nil // skip unreadable files
 		}
-		content := string(data)
-		for _, marker := range markers {
-			if strings.Contains(content, marker) {
-				return fmt.Errorf("found") // abuse error to short-circuit
+		for _, line := range strings.Split(string(data), "\n") {
+			trimmed := strings.TrimSpace(line)
+			for _, marker := range markers {
+				if strings.HasPrefix(trimmed, marker) {
+					return fmt.Errorf("found") // abuse error to short-circuit
+				}
 			}
 		}
 		return nil
