@@ -73,6 +73,37 @@ func TestLooksLikeLinear(t *testing.T) {
 	}
 }
 
+func TestDetectSourceDescription(t *testing.T) {
+	src, err := DetectSource("description", "some-ref", "", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := src.(*DescriptionSource); !ok {
+		t.Errorf("DetectSource(\"description\", ...) = %T; want *DescriptionSource", src)
+	}
+}
+
+func TestDetectSourceFallbackEmpty(t *testing.T) {
+	// Empty configured string should fall back to DescriptionSource.
+	src, err := DetectSource("", "some-ref", "", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := src.(*DescriptionSource); !ok {
+		t.Errorf("DetectSource(\"\", ...) = %T; want *DescriptionSource", src)
+	}
+	// REVIEW: Test is incomplete. It only checks the returned type but never calls Fetch
+	// to verify that ref is forwarded as the Issue Title. A Fetch call asserting
+	// iss.Title == "some-ref" would have caught the NewDescriptionSource("", "") bug above.
+}
+
+func TestDetectSourceUnknown(t *testing.T) {
+	_, err := DetectSource("jira", "some-ref", "", "", "")
+	if err == nil {
+		t.Fatal("expected error for unknown source, got nil")
+	}
+}
+
 func TestParseGitHubRef(t *testing.T) {
 	tests := []struct {
 		ref         string

@@ -23,6 +23,8 @@ type Source interface {
 
 // DetectSource returns a Source based on the ref string and configured source.
 // ref examples: "LIN-423", "42", "owner/repo#42"
+// When configured is "" or "description", a DescriptionSource is returned as a
+// fallback so that callers without a remote issue tracker can still proceed.
 func DetectSource(configured, ref, githubToken, linearToken, defaultRepo string) (Source, error) {
 	switch configured {
 	case "github":
@@ -34,8 +36,18 @@ func DetectSource(configured, ref, githubToken, linearToken, defaultRepo string)
 			return NewLinear(linearToken), nil
 		}
 		return NewGitHub(githubToken, defaultRepo), nil
+	case "", "description":
+		// No remote tracker configured – fall back to a local DescriptionSource.
+		// Title and body are left empty; callers may populate them via the
+		// returned Source's Fetch result (the ref is used as the Issue ID).
+		// REVIEW: Bug: NewDescriptionSource("", "") discards ref entirely. DescriptionSource.Fetch
+		// sets Title from d.title (constructed as ""), not from the ref param passed to Fetch.
+		// The resulting Issue.Title will always be "", so the epic bead gets no name.
+		// Should be NewDescriptionSource(ref, "") to use ref as the title.
+		// The comment above is also wrong: Fetch does not "populate" Title from its ref arg.
+		return NewDescriptionSource("", ""), nil
 	default:
-		return nil, fmt.Errorf("unknown issue_source %q; use github, linear, or auto", configured)
+		return nil, fmt.Errorf("unknown issue_source %q; use github, linear, auto, or description", configured)
 	}
 }
 
