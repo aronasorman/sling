@@ -54,7 +54,9 @@ type ReviewOptions struct {
 	ContextFiles map[string]string
 }
 
-// Review runs the Reviewer agent (Sonnet) on a bead's worktree, adding REVIEW: markers.
+// Review creates a new jj commit in the bead's worktree so a human reviewer
+// can add REVIEW: markers directly in the code files.
+// After adding markers, run `sling address <id>` to have the Addresser resolve them.
 func Review(beadID string, opts ReviewOptions) error {
 	b, err := bead.Show(beadID)
 	if err != nil {
@@ -66,25 +68,13 @@ func Review(beadID string, opts ReviewOptions) error {
 		wtPath = worktree.WorktreePath(opts.RepoRoot, beadID)
 	}
 
-	fmt.Printf("Running Reviewer (Sonnet) for bead %s — %s\n", beadID, b.Title)
-	systemPrompt := agent.ReviewerSystemPrompt(b.Title, opts.ContextFiles)
-	userPrompt := fmt.Sprintf(
-		"Review the implementation of bead: %s\n\nBead description:\n%s\n\n"+
-			"Run `jj diff` first to see the changes, then add REVIEW: markers for any issues you find.",
-		b.Title, b.Body,
-	)
-
-	if err := agent.Run(agent.RunOptions{
-		WorkDir:      wtPath,
-		SystemPrompt: systemPrompt,
-		UserPrompt:   userPrompt,
-		Model:        agent.ModelSonnet,
-		MaxTurns:     30,
-	}); err != nil {
-		return fmt.Errorf("review: agent: %w", err)
+	commitMsg := fmt.Sprintf("review: %s", beadID)
+	if err := worktree.NewCommit(wtPath, commitMsg); err != nil {
+		return fmt.Errorf("review: create review commit: %w", err)
 	}
 
-	fmt.Printf("Review complete for bead %s.\n", beadID)
+	fmt.Printf("Review commit created in worktree: %s\n", wtPath)
+	fmt.Printf("Add REVIEW: markers to code files, then run `sling address %s` to resolve them.\n", beadID)
 	return nil
 }
 
