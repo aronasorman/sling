@@ -38,14 +38,8 @@ func DetectSource(configured, ref, githubToken, linearToken, defaultRepo string)
 		return NewGitHub(githubToken, defaultRepo), nil
 	case "", "description":
 		// No remote tracker configured – fall back to a local DescriptionSource.
-		// Title and body are left empty; callers may populate them via the
-		// returned Source's Fetch result (the ref is used as the Issue ID).
-		// REVIEW: Bug: NewDescriptionSource("", "") discards ref entirely. DescriptionSource.Fetch
-		// sets Title from d.title (constructed as ""), not from the ref param passed to Fetch.
-		// The resulting Issue.Title will always be "", so the epic bead gets no name.
-		// Should be NewDescriptionSource(ref, "") to use ref as the title.
-		// The comment above is also wrong: Fetch does not "populate" Title from its ref arg.
-		return NewDescriptionSource("", ""), nil
+		// ref is used as the Issue Title so the epic bead gets a meaningful name.
+		return NewDescriptionSource(ref, ""), nil
 	default:
 		return nil, fmt.Errorf("unknown issue_source %q; use github, linear, auto, or description", configured)
 	}

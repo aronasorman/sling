@@ -92,9 +92,14 @@ func TestDetectSourceFallbackEmpty(t *testing.T) {
 	if _, ok := src.(*DescriptionSource); !ok {
 		t.Errorf("DetectSource(\"\", ...) = %T; want *DescriptionSource", src)
 	}
-	// REVIEW: Test is incomplete. It only checks the returned type but never calls Fetch
-	// to verify that ref is forwarded as the Issue Title. A Fetch call asserting
-	// iss.Title == "some-ref" would have caught the NewDescriptionSource("", "") bug above.
+	// Verify that ref is forwarded as the Issue Title.
+	iss, err := src.Fetch(context.Background(), "some-ref")
+	if err != nil {
+		t.Fatalf("Fetch unexpected error: %v", err)
+	}
+	if iss.Title != "some-ref" {
+		t.Errorf("Title = %q; want %q", iss.Title, "some-ref")
+	}
 }
 
 func TestDetectSourceUnknown(t *testing.T) {
