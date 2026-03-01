@@ -1,0 +1,19 @@
+[project]
+client = "eclub"
+remote = "github"
+issue_source = "github"        # "linear", "github", or "auto"
+linear_team = "ENG"            # if using Linear
+# github_repo auto-detected from git remote
+
+[execution]
+max_attempts = 3
+review_max_rounds = 3
+
+[context]
+conventions = "docs/CONVENTIONS.md"
+tech_stack = "docs/TECH_STACK.md"
+agent_instructions = "AGENTS.md"
+
+[notifications]
+telegram_enabled = true
+telegram_chat_id = ""
