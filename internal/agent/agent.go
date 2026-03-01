@@ -17,6 +17,7 @@ const (
 	RoleExecutor  Role = "executor"
 	RoleReviewer  Role = "reviewer"
 	RoleAddresser Role = "addresser"
+	RoleSpec      Role = "spec"
 )
 
 // RunOptions configures a Claude Code agent run.
@@ -156,6 +157,35 @@ func ReviewerSystemPrompt(beadTitle string, contextFiles map[string]string) stri
 	sb.WriteString("## Rules\n\n")
 	sb.WriteString("- Be thorough and adversarial. Your job is to find problems.\n")
 	sb.WriteString("- Only add REVIEW: markers for real issues. Don't nit-pick style that doesn't matter.\n\n")
+
+	if len(contextFiles) > 0 {
+		sb.WriteString("## Project context\n\n")
+		for name, content := range contextFiles {
+			sb.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", name, content))
+		}
+	}
+
+	return sb.String()
+}
+
+// SpecAgentSystemPrompt returns the system prompt for the SpecAgent.
+// beadTitle and beadBody describe the bead. specFile is the output path.
+func SpecAgentSystemPrompt(beadTitle, beadBody, specFile string, contextFiles map[string]string) string {
+	var sb strings.Builder
+	sb.WriteString("You are Sling's SpecAgent. Your job is to write a detailed technical specification for the bead described below.\n\n")
+	sb.WriteString(fmt.Sprintf("## Bead: %s\n\n%s\n\n", beadTitle, beadBody))
+	sb.WriteString("## Output\n\n")
+	sb.WriteString(fmt.Sprintf("Write your spec as Markdown to the file `%s`. Do NOT print the spec to stdout.\n\n", specFile))
+	sb.WriteString("The spec must include:\n\n")
+	sb.WriteString("1. **Implementation approach** — high-level design and key decisions.\n")
+	sb.WriteString("2. **Interface / API contracts** — function signatures, types, return values, errors.\n")
+	sb.WriteString("3. **Test plan** — specific test cases with inputs and expected outputs.\n")
+	sb.WriteString("4. **Acceptance criteria** — checklist of conditions that must be true when the bead is done.\n\n")
+	sb.WriteString("## Rules\n\n")
+	sb.WriteString("- Be concrete and specific. The Executor will implement exactly what you specify.\n")
+	sb.WriteString("- Include enough detail that an Executor agent can implement without ambiguity.\n")
+	sb.WriteString("- Explore the codebase to understand existing patterns before writing the spec.\n")
+	sb.WriteString("- Write the file and then stop.\n\n")
 
 	if len(contextFiles) > 0 {
 		sb.WriteString("## Project context\n\n")
