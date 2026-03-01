@@ -119,11 +119,7 @@ func ExecutorSystemPrompt(beadTitle, beadBody, beadID string, contextFiles map[s
 	sb.WriteString("## Rules\n\n")
 	sb.WriteString("- Write code, tests, and any necessary documentation.\n")
 	sb.WriteString("- Run the tests and ensure they pass before finishing.\n")
-	sb.WriteString("- Commit your changes with jj (do NOT push).\n")
-	sb.WriteString("- **IMPORTANT**: When you are done and all tests pass, create the sentinel file:\n")
-	sb.WriteString("  ```\n  touch .sling-done\n  ```\n")
-	sb.WriteString("  This file signals Sling that the bead is complete.\n")
-	sb.WriteString("- Do NOT create .sling-done until tests are passing and code is committed.\n\n")
+	sb.WriteString("- Commit your changes with jj (do NOT push).\n\n")
 
 	if len(contextFiles) > 0 {
 		sb.WriteString("## Project context\n\n")
@@ -131,6 +127,11 @@ func ExecutorSystemPrompt(beadTitle, beadBody, beadID string, contextFiles map[s
 			sb.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", name, content))
 		}
 	}
+
+	sb.WriteString("## FINAL STEP — MANDATORY\n\n")
+	sb.WriteString("After all code is written, tests pass, and changes are committed with jj:\n\n")
+	sb.WriteString("```bash\ntouch .sling-done\n```\n\n")
+	sb.WriteString("This is NOT optional. If you do not create this file, your work will be discarded and the bead will be retried.\n")
 
 	return sb.String()
 }

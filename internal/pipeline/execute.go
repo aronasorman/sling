@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aronasorman/sling/internal/agent"
 	"github.com/aronasorman/sling/internal/bead"
@@ -95,7 +96,10 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		_ = os.Remove(filepath.Join(wt.Path, ".sling-done"))
 
 		systemPrompt := agent.ExecutorSystemPrompt(b.Title, b.Body, b.ID, opts.ContextFiles)
-		userPrompt := fmt.Sprintf("Implement bead: %s\n\n%s", b.Title, b.Body)
+		userPrompt := fmt.Sprintf("Implement bead: %s\n\n%s\n\n⚠️ Final step: run `touch .sling-done` in the worktree root after committing.", b.Title, b.Body)
+		if attempt >= 2 {
+			userPrompt = fmt.Sprintf("⚠️ RETRY ATTEMPT %d: A previous attempt completed the work but did NOT create .sling-done. This is your only job after committing: run `touch .sling-done`. Without it, your work is wasted.\n\n", attempt) + userPrompt
+		}
 
 		err := agent.Run(agent.RunOptions{
 			WorkDir:      wt.Path,
@@ -109,9 +113,17 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 			fmt.Printf("Agent exited with error on attempt %d: %v\n", attempt, err)
 		}
 
-		// Check for .sling-done sentinel.
+		// Check for .sling-done sentinel, retrying a few times in case of
+		// filesystem flush delays.
 		sentinelPath := filepath.Join(wt.Path, ".sling-done")
-		if _, err := os.Stat(sentinelPath); err == nil {
+		var sentinelErr error
+		for i := 0; i < 5; i++ {
+			if _, sentinelErr = os.Stat(sentinelPath); sentinelErr == nil {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		if sentinelErr == nil {
 			fmt.Printf("Bead %s completed successfully.\n", b.ID)
 			// Run automated review before labeling review-pending.
 			// RunAutomatedReview handles label + notification when it finishes.
