@@ -47,6 +47,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		RepoRoot:        repoRoot,
 		MaxAttempts:     cfg.Execution.MaxAttempts,
 		ReviewMaxRounds: cfg.Execution.ReviewMaxRounds,
+		SpecMaxTurns:    cfg.Execution.SpecMaxTurns,
 		Notifier:        notifier,
 		ContextFiles:    contextFiles,
 	})

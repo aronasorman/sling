@@ -16,10 +16,6 @@ func TestSpecCmdRegistered(t *testing.T) {
 	// The command must require exactly one argument (the bead ID).
 	// Cobra returns an error when no args are provided.
 	cmd := specCmd
-	// REVIEW: cmd.SetArgs([]string{}) has no effect here — the test calls
-	// cmd.Args(...) directly with an explicit slice, so the SetArgs call is
-	// dead code and is misleading.  Remove it.
-	cmd.SetArgs([]string{}) // no args
 	if err := cmd.Args(cmd, []string{}); err == nil {
 		t.Error("specCmd.Args should reject zero arguments")
 	}

@@ -45,7 +45,7 @@ func runSpec(cmd *cobra.Command, args []string) error {
 	repoRoot := worktree.DetectRepoRoot(cwd)
 	contextFiles := loadContextFiles(cfg, repoRoot)
 
-	_, err = pipeline.RunSpecAgent(beadID, repoRoot, contextFiles)
+	_, err = pipeline.RunSpecAgent(beadID, repoRoot, contextFiles, cfg.Execution.SpecMaxTurns)
 	if err != nil {
 		return fmt.Errorf("spec: %w", err)
 	}

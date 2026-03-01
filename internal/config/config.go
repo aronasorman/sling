@@ -30,8 +30,10 @@ type ProjectConfig struct {
 }
 
 type ExecutionConfig struct {
-	MaxAttempts    int `mapstructure:"max_attempts"`
+	MaxAttempts     int `mapstructure:"max_attempts"`
 	ReviewMaxRounds int `mapstructure:"review_max_rounds"`
+	// SpecMaxTurns caps SpecAgent agentic turns (0 → default 20).
+	SpecMaxTurns int `mapstructure:"spec_max_turns"`
 }
 
 type ContextConfig struct {

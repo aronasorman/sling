@@ -17,10 +17,6 @@ const (
 	RoleExecutor  Role = "executor"
 	RoleReviewer  Role = "reviewer"
 	RoleAddresser Role = "addresser"
-	// REVIEW: RoleSpec is defined here but never assigned or referenced anywhere
-	// in the codebase (RunOptions has no Role field). It is dead code and should
-	// either be wired up or removed.
-	RoleSpec      Role = "spec"
 )
 
 // RunOptions configures a Claude Code agent run.
@@ -197,6 +193,7 @@ func SpecAgentSystemPrompt(beadTitle, beadBody, specFile string, contextFiles ma
 	sb.WriteString("- Be concrete and specific. The Executor will implement exactly what you specify.\n")
 	sb.WriteString("- Include enough detail that an Executor agent can implement without ambiguity.\n")
 	sb.WriteString("- Explore the codebase to understand existing patterns before writing the spec.\n")
+	sb.WriteString("- Do NOT modify any source file in the repository. Read-only exploration only.\n")
 	sb.WriteString("- Write the file and then stop.\n\n")
 
 	if len(contextFiles) > 0 {

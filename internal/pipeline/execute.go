@@ -17,8 +17,10 @@ type ExecuteOptions struct {
 	RepoRoot        string
 	MaxAttempts     int
 	ReviewMaxRounds int
-	Notifier        *notify.Notifier
-	ContextFiles    map[string]string
+	// SpecMaxTurns caps the number of agentic turns for the SpecAgent (0 → default 20).
+	SpecMaxTurns int
+	Notifier     *notify.Notifier
+	ContextFiles map[string]string
 }
 
 // ExecuteResult is returned after execution completes.
@@ -84,7 +86,7 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 
 	// Run spec agent before executor so the Executor has a detailed technical spec.
 	executorContextFiles := opts.ContextFiles
-	specContent, specErr := RunSpecAgent(b.ID, opts.RepoRoot, opts.ContextFiles)
+	specContent, specErr := RunSpecAgent(b.ID, opts.RepoRoot, opts.ContextFiles, opts.SpecMaxTurns)
 	if specErr != nil {
 		fmt.Printf("Warning: spec agent failed (proceeding without spec): %v\n", specErr)
 	} else if specContent != "" {
@@ -93,11 +95,9 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		for k, v := range opts.ContextFiles {
 			enriched[k] = v
 		}
-		// REVIEW: "spec" is a hardcoded key that silently overwrites any user-configured
-		// context file that also happens to be named "spec" (sling.toml [context] section
-		// allows arbitrary names). Use a reserved sentinel key (e.g. "__spec__") to avoid
-		// this silent collision.
-		enriched["spec"] = specContent
+		// Use the reserved "__spec__" key so user-configured context file names
+		// (from sling.toml) can never collide with the generated spec.
+		enriched["__spec__"] = specContent
 		executorContextFiles = enriched
 	}
 
