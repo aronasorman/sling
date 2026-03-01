@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -40,7 +41,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Resolve GitHub repo from config or git remote.
 	githubRepo := cfg.Project.GitHubRepo
 	if githubRepo == "" {
-		githubRepo = detectGitHubRepo(cwd)
+		detected, err := detectGitHubRepo(cwd)
+		if err != nil {
+			fmt.Printf("Warning: %v\n", err)
+		} else {
+			githubRepo = detected
+		}
 	}
 
 	src, err := issue.DetectSource(cfg.Project.IssueSource, ref, cfg.GitHubToken, cfg.LinearToken, githubRepo)
@@ -58,7 +64,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Phase 2: Planning.
 	contextFiles := loadContextFiles(cfg, cwd)
-	plan, err := pipeline.RunPlanner(result.EpicID, result.Issue, contextFiles)
+	plan, err := pipeline.RunPlanner(result.EpicID, cwd, result.Issue, contextFiles)
 	if err != nil {
 		return fmt.Errorf("planning failed: %w", err)
 	}
@@ -76,12 +82,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 }
 
 // detectGitHubRepo tries to infer "owner/repo" from the git remote URL.
-func detectGitHubRepo(dir string) string {
+// Returns an error if the remote URL cannot be fetched or is not a GitHub URL.
+func detectGitHubRepo(dir string) (string, error) {
 	out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("detectGitHubRepo: could not get git remote URL: %w", err)
 	}
-	return parseGitHubRepoFromURL(strings.TrimSpace(string(out)))
+	rawURL := strings.TrimSpace(string(out))
+	repo := parseGitHubRepoFromURL(rawURL)
+	if repo == "" {
+		return "", fmt.Errorf("detectGitHubRepo: remote %q is not a GitHub URL; set github_repo in sling.toml", rawURL)
+	}
+	return repo, nil
 }
 
 // parseGitHubRepoFromURL extracts "owner/repo" from a GitHub remote URL.
@@ -109,7 +121,11 @@ func loadContextFiles(cfg *config.Config, repoRoot string) map[string]string {
 		if path == "" {
 			return
 		}
-		data, err := os.ReadFile(repoRoot + "/" + path)
+		// Support absolute paths (e.g. /tmp/foo.md) and repo-relative paths.
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(repoRoot, path)
+		}
+		data, err := os.ReadFile(path)
 		if err == nil {
 			files[name] = string(data)
 		}
@@ -119,7 +135,7 @@ func loadContextFiles(cfg *config.Config, repoRoot string) map[string]string {
 	read("agent_instructions", cfg.Context.AgentInstructions)
 
 	// Issue #5: load address-review skill if available.
-	skillPath := os.Getenv("HOME") + "/.claude/skills/address-review/SKILL.md"
+	skillPath := filepath.Join(os.Getenv("HOME"), ".claude", "skills", "address-review", "SKILL.md")
 	if data, err := os.ReadFile(skillPath); err == nil {
 		files["address-review-skill"] = string(data)
 	}
