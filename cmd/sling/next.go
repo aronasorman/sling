@@ -37,17 +37,18 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	notifier := notify.New(
 		cfg.Notify.TelegramEnabled,
-		os.Getenv("TELEGRAM_BOT_TOKEN"),
+		os.Getenv("SLING_TELEGRAM_TOKEN"),
 		cfg.Notify.TelegramChatID,
 	)
 
 	contextFiles := loadContextFiles(cfg, repoRoot)
 
 	result, err := pipeline.Execute(pipeline.ExecuteOptions{
-		RepoRoot:     repoRoot,
-		MaxAttempts:  cfg.Execution.MaxAttempts,
-		Notifier:     notifier,
-		ContextFiles: contextFiles,
+		RepoRoot:        repoRoot,
+		MaxAttempts:     cfg.Execution.MaxAttempts,
+		ReviewMaxRounds: cfg.Execution.ReviewMaxRounds,
+		Notifier:        notifier,
+		ContextFiles:    contextFiles,
 	})
 	if err != nil {
 		return fmt.Errorf("execute: %w", err)
