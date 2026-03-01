@@ -125,10 +125,43 @@ func Claim(id string) error {
 }
 
 // SetLabels replaces all labels on a bead with the given set.
-// All labels are passed as a single comma-joined --set-labels value so that
-// every call is atomic and the flag semantics are unambiguous.
+// Each label is passed as a separate --set-labels flag (the flag is repeatable,
+// not comma-joined).
 func SetLabels(id string, labels []string) error {
-	args := []string{"update", "--json", id, "--set-labels", strings.Join(labels, ",")}
+	args := []string{"update", "--json", id}
+	for _, l := range labels {
+		args = append(args, "--set-labels", l)
+	}
+	_, err := run(args...)
+	return err
+}
+
+// SwapSlingLabel fetches the bead's current labels, removes every sling:* label,
+// and adds newLabel — all in a single bd update call.
+// Non-sling labels are left untouched.
+func SwapSlingLabel(id, newLabel string) error {
+	b, err := Show(id)
+	if err != nil {
+		return fmt.Errorf("bead.SwapSlingLabel: fetch labels: %w", err)
+	}
+
+	args := []string{"update", "--json", id}
+	for _, l := range b.Labels {
+		if strings.HasPrefix(l, "sling:") {
+			args = append(args, "--remove-label", l)
+		}
+	}
+	args = append(args, "--add-label", newLabel)
+	_, err = run(args...)
+	return err
+}
+
+// ClaimAndLabel atomically claims a bead (--claim) and swaps the sling label
+// from removeLabel to addLabel in a single bd update call.
+// Use this instead of separate Claim + SwapSlingLabel calls to avoid a window
+// where the bead is claimed but still carries the old label.
+func ClaimAndLabel(id, addLabel, removeLabel string) error {
+	args := []string{"update", "--json", id, "--claim", "--add-label", addLabel, "--remove-label", removeLabel}
 	_, err := run(args...)
 	return err
 }

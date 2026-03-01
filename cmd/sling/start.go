@@ -49,6 +49,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Fail fast: if the issue source is GitHub we must have a repo slug.
+	if cfg.Project.IssueSource == "github" && githubRepo == "" {
+		return fmt.Errorf("start: github_repo is required when issue_source=github; set it in sling.toml or ensure the git remote is a GitHub URL")
+	}
+
 	src, err := issue.DetectSource(cfg.Project.IssueSource, ref, cfg.GitHubToken, cfg.LinearToken, githubRepo)
 	if err != nil {
 		return err

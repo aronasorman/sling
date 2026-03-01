@@ -61,14 +61,11 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 
 	fmt.Printf("Claiming bead: %s — %s\n", b.ID, b.Title)
 
-	// Atomically claim the bead (sets status=in_progress, fails if already claimed).
-	// This prevents two concurrent `sling next` invocations from executing the same bead.
-	if err := bead.Claim(b.ID); err != nil {
+	// Atomically claim the bead and swap sling:ready → sling:executing in one
+	// bd update call, preventing a window where the bead is claimed but still
+	// carries the old label.
+	if err := bead.ClaimAndLabel(b.ID, bead.LabelExecuting, bead.LabelReady); err != nil {
 		return nil, fmt.Errorf("execute: claim bead %s: %w", b.ID, err)
-	}
-	// Transition label in a single call.
-	if err := bead.SetLabels(b.ID, []string{bead.LabelExecuting}); err != nil {
-		return nil, fmt.Errorf("execute: set executing label: %w", err)
 	}
 
 	// Create jj worktree.
@@ -115,8 +112,8 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		sentinelPath := filepath.Join(wt.Path, ".sling-done")
 		if _, err := os.Stat(sentinelPath); err == nil {
 			fmt.Printf("Bead %s completed successfully.\n", b.ID)
-			// Transition to review-pending in a single atomic call to avoid zombie state.
-			if err := bead.SetLabels(b.ID, []string{bead.LabelReviewPending}); err != nil {
+			// Swap sling:executing → sling:review-pending, preserving non-sling labels.
+			if err := bead.SwapSlingLabel(b.ID, bead.LabelReviewPending); err != nil {
 				// Non-fatal: work is done; log and continue.
 				fmt.Printf("Warning: could not update label to review-pending: %v\n", err)
 			}

@@ -62,8 +62,9 @@ func RunPlanner(epicID, repoRoot string, iss *issue.Issue, contextFiles map[stri
 }
 
 // ReadPlan reads and parses a plan file.
-// It tolerates markdown code fences and any leading/trailing prose by extracting
-// the first JSON object (from the first '{' to the last '}').
+// It tolerates markdown code fences and any leading/trailing prose by locating
+// the first '{' and then using json.Decoder, which automatically consumes
+// exactly one balanced JSON object and ignores any trailing text.
 func ReadPlan(planFile string) (*Plan, error) {
 	data, err := os.ReadFile(planFile)
 	if err != nil {
@@ -72,18 +73,22 @@ func ReadPlan(planFile string) (*Plan, error) {
 
 	raw := string(data)
 
-	// Extract the outermost JSON object by finding the first '{' and last '}'.
+	// Discard everything before the first '{'.
 	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-	if start >= 0 && end > start {
-		raw = raw[start : end+1]
-	} else {
-		raw = strings.TrimSpace(raw)
+	if start < 0 {
+		preview := raw
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return nil, fmt.Errorf("plan: no JSON object found in %s (content: %s)", planFile, preview)
 	}
 
+	// json.Decoder reads the first valid JSON object and stops, so trailing
+	// prose or extra braces after the closing '}' are harmlessly ignored.
 	var plan Plan
-	if err := json.Unmarshal([]byte(raw), &plan); err != nil {
-		preview := raw
+	dec := json.NewDecoder(strings.NewReader(raw[start:]))
+	if err := dec.Decode(&plan); err != nil {
+		preview := raw[start:]
 		if len(preview) > 200 {
 			preview = preview[:200]
 		}
