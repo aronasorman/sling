@@ -14,10 +14,11 @@ import (
 
 // ExecuteOptions configures the execution pipeline.
 type ExecuteOptions struct {
-	RepoRoot     string
-	MaxAttempts  int
-	Notifier     *notify.Notifier
-	ContextFiles map[string]string
+	RepoRoot        string
+	MaxAttempts     int
+	ReviewMaxRounds int
+	Notifier        *notify.Notifier
+	ContextFiles    map[string]string
 }
 
 // ExecuteResult is returned after execution completes.
@@ -112,12 +113,15 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		sentinelPath := filepath.Join(wt.Path, ".sling-done")
 		if _, err := os.Stat(sentinelPath); err == nil {
 			fmt.Printf("Bead %s completed successfully.\n", b.ID)
-			// Swap sling:executing → sling:review-pending, preserving non-sling labels.
-			if err := bead.SwapSlingLabel(b.ID, bead.LabelReviewPending); err != nil {
-				// Non-fatal: work is done; log and continue.
-				fmt.Printf("Warning: could not update label to review-pending: %v\n", err)
+			// Run automated review before labeling review-pending.
+			// RunAutomatedReview handles label + notification when it finishes.
+			if err := RunAutomatedReview(b.ID, wt.Path, AutoReviewOptions{
+				MaxRounds:    opts.ReviewMaxRounds,
+				Notifier:     opts.Notifier,
+				ContextFiles: opts.ContextFiles,
+			}); err != nil {
+				fmt.Printf("Warning: automated review error: %v\n", err)
 			}
-			_ = opts.Notifier.Send(fmt.Sprintf("Sling: bead %q is ready for review.\n%s", b.Title, b.ID))
 			return &ExecuteResult{BeadID: b.ID, WtPath: wt.Path, Succeeded: true}, nil
 		}
 
