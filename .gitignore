@@ -1,3 +1,7 @@
 /sling
 dist/
 *.sling-worktrees/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
