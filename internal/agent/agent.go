@@ -37,8 +37,9 @@ type RunOptions struct {
 // It streams output to stdout/stderr and returns an error if the agent fails.
 func Run(opts RunOptions) error {
 	args := []string{
-		"--print",              // non-interactive
+		"--print",                         // non-interactive
 		"--output-format", "text",
+		"--dangerously-skip-permissions",  // sling always runs in a trusted repo context
 	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)

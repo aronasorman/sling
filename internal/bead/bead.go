@@ -11,14 +11,14 @@ import (
 
 // Bead is the JSON-decoded representation of a bd bead.
 type Bead struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Body        string   `json:"body"`
-	Status      string   `json:"status"` // open, in_progress, blocked, closed
-	Labels      []string `json:"labels"`
-	ParentID    string   `json:"parent_id"`
-	DependsOn   []string `json:"depends_on"` // bead IDs this bead depends on
-	WorktreePath string  `json:"worktree_path"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title"`
+	Body      string            `json:"body"`
+	Status    string            `json:"status"` // open, in_progress, blocked, closed
+	Labels    []string          `json:"labels"`
+	ParentID  string            `json:"parent_id"`
+	DependsOn []string          `json:"depends_on"` // bead IDs this bead depends on
+	Metadata  map[string]string `json:"metadata"`
 }
 
 // run executes a bd command and returns stdout.
@@ -61,6 +61,7 @@ func Create(title, body, parentID string, labels []string) (string, error) {
 }
 
 // Show returns the bead with the given ID.
+// DependsOn is populated from metadata if not natively returned by bd.
 func Show(id string) (*Bead, error) {
 	out, err := run("show", "--json", id)
 	if err != nil {
@@ -69,6 +70,12 @@ func Show(id string) (*Bead, error) {
 	var b Bead
 	if err := json.Unmarshal(out, &b); err != nil {
 		return nil, fmt.Errorf("bead.Show decode: %w", err)
+	}
+	// Populate DependsOn from metadata if bd did not return it natively.
+	if len(b.DependsOn) == 0 && b.Metadata != nil {
+		if deps, ok := b.Metadata["depends_on"]; ok && deps != "" {
+			b.DependsOn = strings.Split(deps, ",")
+		}
 	}
 	return &b, nil
 }
@@ -99,13 +106,13 @@ func SetStatus(id, status string) error {
 
 // AddLabel adds a label to a bead.
 func AddLabel(id, label string) error {
-	_, err := run("label", "--json", "add", id, label)
+	_, err := run("update", "--json", id, "--add-label", label)
 	return err
 }
 
 // RemoveLabel removes a label from a bead.
 func RemoveLabel(id, label string) error {
-	_, err := run("label", "--json", "remove", id, label)
+	_, err := run("update", "--json", id, "--remove-label", label)
 	return err
 }
 
@@ -113,7 +120,7 @@ func RemoveLabel(id, label string) error {
 func SetLabels(id string, labels []string) error {
 	args := []string{"update", "--json", id}
 	for _, l := range labels {
-		args = append(args, "--label", l)
+		args = append(args, "--set-labels", l)
 	}
 	_, err := run(args...)
 	return err
@@ -125,19 +132,44 @@ func UpdateBody(id, body string) error {
 	return err
 }
 
-// UpdateWorktree records the worktree path on the bead.
+// UpdateWorktree records the worktree path in bead metadata.
 func UpdateWorktree(id, path string) error {
-	_, err := run("update", "--json", id, "--worktree", path)
+	_, err := run("update", "--json", id, "--set-metadata", "worktree_path="+path)
 	return err
 }
 
-// SetDependsOn records dependency bead IDs on a bead.
-func SetDependsOn(id string, depIDs []string) error {
-	args := []string{"update", "--json", id}
-	for _, dep := range depIDs {
-		args = append(args, "--depends-on", dep)
+// worktreeMarkerStart/End delimit the worktree path stored in the bead body
+// (legacy fallback for beads written before the metadata approach).
+const worktreeMarkerStart = "\n\n<!-- sling-worktree-path: "
+const worktreeMarkerEnd = " -->"
+
+// WorktreePathFromBead returns the worktree path for a bead.
+// Checks metadata first, then falls back to the legacy body comment.
+func WorktreePathFromBead(b *Bead) string {
+	if b.Metadata != nil {
+		if path, ok := b.Metadata["worktree_path"]; ok && path != "" {
+			return path
+		}
 	}
-	_, err := run(args...)
+	// Legacy fallback: parse the body comment written by older UpdateWorktree.
+	body := b.Body
+	start := strings.Index(body, worktreeMarkerStart)
+	if start < 0 {
+		return ""
+	}
+	rest := body[start+len(worktreeMarkerStart):]
+	end := strings.Index(rest, worktreeMarkerEnd)
+	if end < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return rest[:end]
+}
+
+// SetDependsOn records dependency bead IDs in bead metadata.
+// bd update does not expose a --deps flag; we use --set-metadata instead.
+// Show() reads them back from metadata into DependsOn automatically.
+func SetDependsOn(id string, depIDs []string) error {
+	_, err := run("update", "--json", id, "--set-metadata", "depends_on="+strings.Join(depIDs, ","))
 	return err
 }
 
@@ -162,19 +194,15 @@ func HasLabel(b *Bead, label string) bool {
 
 // SlingLabel constants.
 const (
-	LabelPlanned        = "sling:planned"
-	LabelReady          = "sling:ready"
-	LabelExecuting      = "sling:executing"
-	LabelReviewPending  = "sling:review-pending"
-	LabelAddressing     = "sling:addressing"
-	LabelFailed         = "sling:failed"
-	LabelBlocked        = "sling:blocked"
+	LabelPlanned       = "sling:planned"
+	LabelReady         = "sling:ready"
+	LabelExecuting     = "sling:executing"
+	LabelReviewPending = "sling:review-pending"
+	LabelAddressing    = "sling:addressing"
+	LabelFailed        = "sling:failed"
+	LabelBlocked       = "sling:blocked"
 )
 
-// StatusOpen       = "open"
-// StatusInProgress = "in_progress"
-// StatusBlocked    = "blocked"
-// StatusClosed     = "closed"
 const (
 	StatusOpen       = "open"
 	StatusInProgress = "in_progress"
