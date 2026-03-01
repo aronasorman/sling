@@ -60,7 +60,7 @@ func TestHasReviewMarkersStyles(t *testing.T) {
 func TestHasReviewMarkersSkipsHiddenDirs(t *testing.T) {
 	dir := t.TempDir()
 
-	// REVIEW: marker inside .git — should be skipped.
+	// This tests that a REVIEW marker inside .git dir should be skipped.
 	gitDir := filepath.Join(dir, ".git")
 	if err := os.MkdirAll(gitDir, 0o755); err != nil {
 		t.Fatal(err)
