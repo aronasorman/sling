@@ -51,7 +51,7 @@ func Add(repoRoot, beadID string) (*Workspace, error) {
 	}
 
 	// Create and set the branch in the new workspace.
-	if _, err := run(wtPath, "branch", "create", branch); err != nil {
+	if _, err := run(wtPath, "bookmark", "create", branch); err != nil {
 		return nil, fmt.Errorf("jj branch create: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func PushBranch(wtPath, branch, remote string) error {
 	if remote == "" {
 		remote = "origin"
 	}
-	_, err := run(wtPath, "git", "push", "--remote", remote, "--branch", branch)
+	_, err := run(wtPath, "git", "push", "--remote", remote, "--bookmark", branch)
 	return err
 }
 

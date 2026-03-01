@@ -67,10 +67,20 @@ func Show(id string) (*Bead, error) {
 	if err != nil {
 		return nil, err
 	}
-	var b Bead
-	if err := json.Unmarshal(out, &b); err != nil {
-		return nil, fmt.Errorf("bead.Show decode: %w", err)
+	// bd show --json returns an array; take the first element.
+	var bs []Bead
+	if err := json.Unmarshal(out, &bs); err != nil {
+		// Fallback: try unmarshaling as a single object.
+		var b0 Bead
+		if err2 := json.Unmarshal(out, &b0); err2 != nil {
+			return nil, fmt.Errorf("bead.Show decode: %w", err)
+		}
+		bs = []Bead{b0}
 	}
+	if len(bs) == 0 {
+		return nil, fmt.Errorf("bead.Show: no bead found with id %s", id)
+	}
+	b := bs[0]
 	// Populate DependsOn from metadata if bd did not return it natively.
 	if len(b.DependsOn) == 0 && b.Metadata != nil {
 		if deps, ok := b.Metadata["depends_on"]; ok && deps != "" {

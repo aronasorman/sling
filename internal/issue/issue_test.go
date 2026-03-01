@@ -1,6 +1,54 @@
 package issue
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
+
+func TestDescriptionSource(t *testing.T) {
+	src := NewDescriptionSource("My Title", "My body text.")
+
+	iss, err := src.Fetch(context.Background(), "local:1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if iss.ID != "local:1" {
+		t.Errorf("ID = %q; want %q", iss.ID, "local:1")
+	}
+	if iss.Title != "My Title" {
+		t.Errorf("Title = %q; want %q", iss.Title, "My Title")
+	}
+	if iss.Body != "My body text." {
+		t.Errorf("Body = %q; want %q", iss.Body, "My body text.")
+	}
+	if iss.URL != "" {
+		t.Errorf("URL = %q; want empty string", iss.URL)
+	}
+}
+
+func TestDescriptionSourceEmptyFields(t *testing.T) {
+	src := NewDescriptionSource("", "")
+
+	iss, err := src.Fetch(context.Background(), "ref-xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if iss.ID != "ref-xyz" {
+		t.Errorf("ID = %q; want %q", iss.ID, "ref-xyz")
+	}
+	if iss.Title != "" {
+		t.Errorf("Title = %q; want empty string", iss.Title)
+	}
+	if iss.Body != "" {
+		t.Errorf("Body = %q; want empty string", iss.Body)
+	}
+}
+
+func TestDescriptionSourceImplementsSource(t *testing.T) {
+	// Compile-time check: *DescriptionSource must satisfy Source interface.
+	var _ Source = (*DescriptionSource)(nil)
+}
 
 func TestLooksLikeLinear(t *testing.T) {
 	tests := []struct {

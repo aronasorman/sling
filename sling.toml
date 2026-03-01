@@ -1,0 +1,15 @@
+[project]
+client = "sling"
+remote = "github"
+issue_source = "github"
+github_repo = "aronasorman/sling"
+
+[execution]
+max_attempts = 3
+review_max_rounds = 3
+
+[context]
+agent_instructions = "docs/ARCHITECTURE.md"
+
+[notifications]
+telegram_enabled = false
