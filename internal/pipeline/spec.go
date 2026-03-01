@@ -40,6 +40,17 @@ func RunSpecAgent(beadID, repoRoot string, contextFiles map[string]string) (stri
 	)
 
 	fmt.Printf("Running SpecAgent (Sonnet) for bead %s...\n", beadID)
+	// REVIEW: MaxTurns is hard-coded to 20 with no way to configure it. For complex
+	// beads on large codebases the spec agent may need more turns to fully explore
+	// the codebase before writing. Consider exposing this via a SpecOptions struct
+	// or reusing the MaxAttempts/MaxTurns field from ExecuteOptions.
+	//
+	// REVIEW: WorkDir is repoRoot, but the agent.Run framework always passes
+	// --dangerously-skip-permissions. The spec system prompt says "Explore the
+	// codebase … Write the file and then stop" but never says "do NOT modify
+	// source files". A confused agent could mutate the main repo rather than the
+	// isolated worktree. Add an explicit rule: "Do NOT modify any source file in
+	// the repository."
 	if err := agent.Run(agent.RunOptions{
 		WorkDir:      repoRoot,
 		SystemPrompt: systemPrompt,

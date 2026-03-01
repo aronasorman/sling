@@ -17,6 +17,9 @@ const (
 	RoleExecutor  Role = "executor"
 	RoleReviewer  Role = "reviewer"
 	RoleAddresser Role = "addresser"
+	// REVIEW: RoleSpec is defined here but never assigned or referenced anywhere
+	// in the codebase (RunOptions has no Role field). It is dead code and should
+	// either be wired up or removed.
 	RoleSpec      Role = "spec"
 )
 

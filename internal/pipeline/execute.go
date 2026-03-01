@@ -82,6 +82,25 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		fmt.Printf("Warning: could not record worktree path on bead: %v\n", err)
 	}
 
+	// Run spec agent before executor so the Executor has a detailed technical spec.
+	executorContextFiles := opts.ContextFiles
+	specContent, specErr := RunSpecAgent(b.ID, opts.RepoRoot, opts.ContextFiles)
+	if specErr != nil {
+		fmt.Printf("Warning: spec agent failed (proceeding without spec): %v\n", specErr)
+	} else if specContent != "" {
+		// Merge spec into a fresh map so we don't mutate the shared options.
+		enriched := make(map[string]string, len(opts.ContextFiles)+1)
+		for k, v := range opts.ContextFiles {
+			enriched[k] = v
+		}
+		// REVIEW: "spec" is a hardcoded key that silently overwrites any user-configured
+		// context file that also happens to be named "spec" (sling.toml [context] section
+		// allows arbitrary names). Use a reserved sentinel key (e.g. "__spec__") to avoid
+		// this silent collision.
+		enriched["spec"] = specContent
+		executorContextFiles = enriched
+	}
+
 	// Run executor with retry.
 	if opts.MaxAttempts < 1 {
 		opts.MaxAttempts = 3
@@ -91,7 +110,7 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		fmt.Printf("Executor attempt %d/%d for bead %s\n", attempt, opts.MaxAttempts, b.ID)
 
-		systemPrompt := agent.ExecutorSystemPrompt(b.Title, b.Body, b.ID, opts.ContextFiles)
+		systemPrompt := agent.ExecutorSystemPrompt(b.Title, b.Body, b.ID, executorContextFiles)
 		userPrompt := fmt.Sprintf("Implement bead: %s\n\n%s", b.Title, b.Body)
 		if attempt >= 2 {
 			userPrompt = fmt.Sprintf("⚠️ RETRY ATTEMPT %d: A previous attempt did not complete successfully. Implement the bead, ensure all tests pass, commit your changes, then run `sling signal-done %s`.\n\n", attempt, b.ID) + userPrompt
