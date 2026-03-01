@@ -10,7 +10,7 @@ import (
 
 var signalDoneCmd = &cobra.Command{
 	Use:   "signal-done <bead-id>",
-	Short: "Mark a bead as review-pending after the executor finishes.",
+	Short: "Manual rescue only: mark a bead as review-pending (orchestrator does this automatically).",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSignalDone,
 }

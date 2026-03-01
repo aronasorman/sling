@@ -51,7 +51,7 @@ func ClaimNextReady() (*bead.Bead, error) {
 }
 
 // Execute claims the next ready bead, spawns the Executor agent in a jj worktree,
-// and waits for the agent to call `sling signal-done`. On failure, labels the bead sling:failed.
+// and runs automated review. On failure, labels the bead sling:failed.
 func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 	b, err := ClaimNextReady()
 	if err != nil {
@@ -113,7 +113,7 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		systemPrompt := agent.ExecutorSystemPrompt(b.Title, b.Body, b.ID, executorContextFiles)
 		userPrompt := fmt.Sprintf("Implement bead: %s\n\n%s", b.Title, b.Body)
 		if attempt >= 2 {
-			userPrompt = fmt.Sprintf("⚠️ RETRY ATTEMPT %d: A previous attempt did not complete successfully. Implement the bead, ensure all tests pass, commit your changes, then run `sling signal-done %s`.\n\n", attempt, b.ID) + userPrompt
+			userPrompt = fmt.Sprintf("⚠️ RETRY ATTEMPT %d: A previous attempt did not complete successfully. Implement the bead, ensure all tests pass, and commit your changes.\n\n", attempt) + userPrompt
 		}
 
 		err := agent.Run(agent.RunOptions{
@@ -130,8 +130,14 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 			continue
 		}
 
-		// Agent returned successfully — treat as success.
+		// Agent returned successfully — orchestrator handles done-signaling.
 		fmt.Printf("Bead %s completed successfully.\n", b.ID)
+		if err := bead.RemoveLabel(b.ID, bead.LabelExecuting); err != nil {
+			fmt.Printf("Warning: could not remove executing label: %v\n", err)
+		}
+		if err := bead.AddLabel(b.ID, bead.LabelReviewPending); err != nil {
+			fmt.Printf("Warning: could not add review-pending label: %v\n", err)
+		}
 		// Run automated review before labeling review-pending.
 		// RunAutomatedReview handles label + notification when it finishes.
 		if err := RunAutomatedReview(b.ID, wt.Path, AutoReviewOptions{

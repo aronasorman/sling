@@ -136,10 +136,8 @@ func ExecutorSystemPrompt(beadTitle, beadBody, beadID string, contextFiles map[s
 		}
 	}
 
-	sb.WriteString("## FINAL STEP — MANDATORY\n\n")
-	sb.WriteString("When all work is committed and tests pass, run:\n")
-	sb.WriteString("```\nsling signal-done <bead-id>\n```\n\n")
-	sb.WriteString("Replace <bead-id> with the actual bead ID passed in your context.\n")
+	sb.WriteString("## Done condition\n\n")
+	sb.WriteString("When all work is committed and tests pass, you are done. The orchestrator handles all signaling automatically.\n")
 	sb.WriteString(fmt.Sprintf("The bead ID for this task is: %s\n", beadID))
 
 	return sb.String()
