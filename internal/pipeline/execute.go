@@ -61,15 +61,14 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 
 	fmt.Printf("Claiming bead: %s — %s\n", b.ID, b.Title)
 
-	// Transition to executing.
-	if err := bead.RemoveLabel(b.ID, bead.LabelReady); err != nil {
-		return nil, err
+	// Atomically claim the bead (sets status=in_progress, fails if already claimed).
+	// This prevents two concurrent `sling next` invocations from executing the same bead.
+	if err := bead.Claim(b.ID); err != nil {
+		return nil, fmt.Errorf("execute: claim bead %s: %w", b.ID, err)
 	}
-	if err := bead.AddLabel(b.ID, bead.LabelExecuting); err != nil {
-		return nil, err
-	}
-	if err := bead.SetStatus(b.ID, bead.StatusInProgress); err != nil {
-		return nil, err
+	// Transition label in a single call.
+	if err := bead.SetLabels(b.ID, []string{bead.LabelExecuting}); err != nil {
+		return nil, fmt.Errorf("execute: set executing label: %w", err)
 	}
 
 	// Create jj worktree.
@@ -116,12 +115,10 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 		sentinelPath := filepath.Join(wt.Path, ".sling-done")
 		if _, err := os.Stat(sentinelPath); err == nil {
 			fmt.Printf("Bead %s completed successfully.\n", b.ID)
-			// Transition to review-pending.
-			if err := bead.RemoveLabel(b.ID, bead.LabelExecuting); err != nil {
-				return nil, err
-			}
-			if err := bead.AddLabel(b.ID, bead.LabelReviewPending); err != nil {
-				return nil, err
+			// Transition to review-pending in a single atomic call to avoid zombie state.
+			if err := bead.SetLabels(b.ID, []string{bead.LabelReviewPending}); err != nil {
+				// Non-fatal: work is done; log and continue.
+				fmt.Printf("Warning: could not update label to review-pending: %v\n", err)
 			}
 			_ = opts.Notifier.Send(fmt.Sprintf("Sling: bead %q is ready for review.\n%s", b.Title, b.ID))
 			return &ExecuteResult{BeadID: b.ID, WtPath: wt.Path, Succeeded: true}, nil
@@ -154,6 +151,9 @@ func HasReviewMarkers(dir string) (bool, error) {
 	// Marker patterns per ARCHITECTURE.md.
 	markers := []string{"# REVIEW:", "// REVIEW:", "-- REVIEW:", "<!-- REVIEW:", "/* REVIEW:"}
 
+	// Extensions where REVIEW: might legitimately appear as prose (not code markers).
+	skipExts := map[string]bool{".md": true, ".txt": true, ".rst": true}
+
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -163,6 +163,9 @@ func HasReviewMarkers(dir string) (bool, error) {
 				return filepath.SkipDir // skip hidden dirs like .git, .jj
 			}
 			return nil
+		}
+		if skipExts[strings.ToLower(filepath.Ext(path))] {
+			return nil // skip prose/doc files to avoid false positives
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {

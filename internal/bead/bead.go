@@ -116,12 +116,19 @@ func RemoveLabel(id, label string) error {
 	return err
 }
 
+// Claim atomically claims a bead: sets status to in_progress and assignee to
+// the current user. Fails with an error if the bead is already claimed.
+// Use this instead of separate RemoveLabel/AddLabel/SetStatus calls to avoid races.
+func Claim(id string) error {
+	_, err := run("update", "--json", id, "--claim")
+	return err
+}
+
 // SetLabels replaces all labels on a bead with the given set.
+// All labels are passed as a single comma-joined --set-labels value so that
+// every call is atomic and the flag semantics are unambiguous.
 func SetLabels(id string, labels []string) error {
-	args := []string{"update", "--json", id}
-	for _, l := range labels {
-		args = append(args, "--set-labels", l)
-	}
+	args := []string{"update", "--json", id, "--set-labels", strings.Join(labels, ",")}
 	_, err := run(args...)
 	return err
 }
@@ -160,7 +167,7 @@ func WorktreePathFromBead(b *Bead) string {
 	rest := body[start+len(worktreeMarkerStart):]
 	end := strings.Index(rest, worktreeMarkerEnd)
 	if end < 0 {
-		return strings.TrimSpace(rest)
+		return "" // marker start found but end marker missing — return nothing
 	}
 	return rest[:end]
 }
