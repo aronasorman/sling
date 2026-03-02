@@ -12,6 +12,11 @@ import (
 	"github.com/aronasorman/sling/internal/worktree"
 )
 
+// executeBeadList is an injectable stub for bead.List used by ClaimNextReady.
+var executeBeadList = func(label string) ([]*bead.Bead, error) {
+	return bead.List(label)
+}
+
 // ExecuteOptions configures the execution pipeline.
 type ExecuteOptions struct {
 	RepoRoot        string
@@ -21,6 +26,8 @@ type ExecuteOptions struct {
 	SpecMaxTurns int
 	Notifier     *notify.Notifier
 	ContextFiles map[string]string
+	// EpicID when non-empty restricts ClaimNextReady to beads with ParentID == EpicID.
+	EpicID string
 }
 
 // ExecuteResult is returned after execution completes.
@@ -31,14 +38,18 @@ type ExecuteResult struct {
 }
 
 // ClaimNextReady finds the next sling:ready bead whose dependencies are all
-// closed and returns it. Returns nil, nil if no bead is ready.
-func ClaimNextReady() (*bead.Bead, error) {
-	readyBeads, err := bead.List(bead.LabelReady)
+// closed and returns it. When epicID is non-empty only beads whose ParentID
+// matches are considered. Returns (nil, nil) when no eligible bead exists.
+func ClaimNextReady(epicID string) (*bead.Bead, error) {
+	readyBeads, err := executeBeadList(bead.LabelReady)
 	if err != nil {
 		return nil, fmt.Errorf("execute: list ready beads: %w", err)
 	}
 
 	for _, b := range readyBeads {
+		if epicID != "" && b.ParentID != epicID {
+			continue
+		}
 		allClosed, err := allDepsClosed(b.DependsOn)
 		if err != nil {
 			return nil, err
@@ -53,12 +64,11 @@ func ClaimNextReady() (*bead.Bead, error) {
 // Execute claims the next ready bead, spawns the Executor agent in a jj worktree,
 // and runs automated review. On failure, labels the bead sling:failed.
 func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
-	b, err := ClaimNextReady()
+	b, err := ClaimNextReady(opts.EpicID)
 	if err != nil {
 		return nil, err
 	}
 	if b == nil {
-		fmt.Println("No sling:ready beads with all dependencies closed.")
 		return &ExecuteResult{Succeeded: false}, nil
 	}
 
@@ -130,16 +140,12 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 			continue
 		}
 
-		// Agent returned successfully — orchestrator handles done-signaling.
+		// Agent returned successfully — run automated review before transitioning
+		// the bead to sling:review-pending so the bead is not visible to `sling mail`
+		// until the review pass is complete.
+		// RunAutomatedReview handles the label swap (executing → review-pending) and
+		// sends the notification when it finishes.
 		fmt.Printf("Bead %s completed successfully.\n", b.ID)
-		if err := bead.RemoveLabel(b.ID, bead.LabelExecuting); err != nil {
-			fmt.Printf("Warning: could not remove executing label: %v\n", err)
-		}
-		if err := bead.AddLabel(b.ID, bead.LabelReviewPending); err != nil {
-			fmt.Printf("Warning: could not add review-pending label: %v\n", err)
-		}
-		// Run automated review before labeling review-pending.
-		// RunAutomatedReview handles label + notification when it finishes.
 		if err := RunAutomatedReview(b.ID, wt.Path, AutoReviewOptions{
 			MaxRounds:    opts.ReviewMaxRounds,
 			Notifier:     opts.Notifier,
@@ -217,8 +223,8 @@ var (
 	}
 
 	// Routing for ClaimAndExecute.
-	execClaimNextReady = func() (*bead.Bead, error) { return ClaimNextReady() }
-	execRouteEpic      = func(opts EpicExecuteOptions) (*EpicExecuteResult, error) { return ExecuteEpic(opts) }
+	execClaimNextReady  = func(epicID string) (*bead.Bead, error) { return ClaimNextReady(epicID) }
+	execRouteEpic       = func(opts EpicExecuteOptions) (*EpicExecuteResult, error) { return ExecuteEpic(opts) }
 	execRouteStandalone = func(opts ExecuteOptions) (*ExecuteResult, error) { return Execute(opts) }
 
 	// Used by SignalDoneEpic to enumerate sub-beads.
@@ -314,7 +320,7 @@ func topoSortBeads(beads []*bead.Bead) ([]*bead.Bead, error) {
 // ClaimAndExecute peeks at the next sling:ready bead and routes to ExecuteEpic
 // (epic path) or Execute (standalone path).
 func ClaimAndExecute(opts ExecuteOptions) (*ClaimAndExecuteResult, error) {
-	candidate, err := execClaimNextReady()
+	candidate, err := execClaimNextReady(opts.EpicID)
 	if err != nil {
 		return nil, err
 	}
@@ -412,6 +418,16 @@ func ExecuteEpic(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
 		}
 		claimedIDs = append(claimedIDs, b.ID)
 		claimedBeads = append(claimedBeads, b)
+	}
+
+	// Guard: if every claim failed (e.g., racing worker claimed all beads),
+	// abort rather than running an agent over zero sub-beads.
+	if len(claimedIDs) == 0 {
+		fmt.Printf("Warning: no sub-beads of epic %q could be claimed; skipping execution.\n", opts.EpicID)
+		if swapErr := execBeadSwapLabel(opts.EpicID, bead.LabelReady); swapErr != nil {
+			fmt.Printf("Warning: could not revert epic label: %v\n", swapErr)
+		}
+		return &EpicExecuteResult{EpicID: opts.EpicID, Succeeded: false}, nil
 	}
 
 	// Create shared worktree keyed by epicID.

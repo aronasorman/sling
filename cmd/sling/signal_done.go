@@ -52,7 +52,6 @@ func runSignalDone(cmd *cobra.Command, args []string) error {
 	if err := bead.AddLabel(beadID, bead.LabelReviewPending); err != nil {
 		return fmt.Errorf("signal-done: add review-pending label: %w", err)
 	}
-
 	fmt.Printf("✓ Bead %s marked review-pending\n", beadID)
 	return nil
 }

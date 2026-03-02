@@ -199,7 +199,7 @@ func TestClaimAndExecute_RoutesToEpic(t *testing.T) {
 	})
 
 	subBead := &bead.Bead{ID: "s1", ParentID: "epicA", Labels: []string{bead.LabelReady}}
-	execClaimNextReady = func() (*bead.Bead, error) { return subBead, nil }
+	execClaimNextReady = func(epicID string) (*bead.Bead, error) { return subBead, nil }
 
 	var calledEpicID string
 	execRouteEpic = func(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
@@ -246,7 +246,7 @@ func TestClaimAndExecute_RoutesToStandalone(t *testing.T) {
 	})
 
 	standaloneBead := &bead.Bead{ID: "b1", ParentID: "", Labels: []string{bead.LabelReady}}
-	execClaimNextReady = func() (*bead.Bead, error) { return standaloneBead, nil }
+	execClaimNextReady = func(epicID string) (*bead.Bead, error) { return standaloneBead, nil }
 
 	var epicCalled bool
 	execRouteEpic = func(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
@@ -283,7 +283,7 @@ func TestClaimAndExecute_NoReadyBeads(t *testing.T) {
 	orig := execClaimNextReady
 	t.Cleanup(func() { execClaimNextReady = orig })
 
-	execClaimNextReady = func() (*bead.Bead, error) { return nil, nil }
+	execClaimNextReady = func(epicID string) (*bead.Bead, error) { return nil, nil }
 
 	result, err := ClaimAndExecute(ExecuteOptions{RepoRoot: "/tmp/repo"})
 	if err != nil {
@@ -373,6 +373,157 @@ func TestSignalDoneEpic_RejectsSubBead(t *testing.T) {
 	errStr := err.Error()
 	if !containsAny(errStr, "sub-bead", "ParentID") {
 		t.Errorf("error message should mention sub-bead or ParentID, got: %s", errStr)
+	}
+}
+
+// ── ClaimNextReady epicID filter tests (TC-CNR-1 through TC-CNR-5) ────────────
+
+// TC-CNR-1: epicID="" returns first eligible bead regardless of ParentID.
+func TestClaimNextReady_GlobalPick(t *testing.T) {
+	origList := executeBeadList
+	origClosed := expandBeadIsClosed
+	t.Cleanup(func() {
+		executeBeadList = origList
+		expandBeadIsClosed = origClosed
+	})
+
+	beadA := &bead.Bead{ID: "A", ParentID: "ep1", Labels: []string{bead.LabelReady}}
+	beadB := &bead.Bead{ID: "B", ParentID: "ep2", Labels: []string{bead.LabelReady}}
+
+	executeBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{beadA, beadB}, nil
+	}
+	expandBeadIsClosed = func(id string) (bool, error) { return true, nil }
+
+	got, err := ClaimNextReady("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected a bead, got nil")
+	}
+	// Either A or B is acceptable.
+	if got.ID != "A" && got.ID != "B" {
+		t.Errorf("expected A or B, got %q", got.ID)
+	}
+}
+
+// TC-CNR-2: epicID="ep1" returns only beads whose ParentID == "ep1".
+func TestClaimNextReady_EpicFilter(t *testing.T) {
+	origList := executeBeadList
+	origClosed := expandBeadIsClosed
+	t.Cleanup(func() {
+		executeBeadList = origList
+		expandBeadIsClosed = origClosed
+	})
+
+	beadA := &bead.Bead{ID: "A", ParentID: "ep1", Labels: []string{bead.LabelReady}}
+	beadB := &bead.Bead{ID: "B", ParentID: "ep2", Labels: []string{bead.LabelReady}}
+
+	executeBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{beadA, beadB}, nil
+	}
+	expandBeadIsClosed = func(id string) (bool, error) { return true, nil }
+
+	got, err := ClaimNextReady("ep1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected bead A, got nil")
+	}
+	if got.ID != "A" {
+		t.Errorf("expected A, got %q", got.ID)
+	}
+}
+
+// TC-CNR-3: epicID="ep2", only A (parent=ep1) → nil (no ep2 bead).
+func TestClaimNextReady_EpicFilter_NoMatch(t *testing.T) {
+	origList := executeBeadList
+	origClosed := expandBeadIsClosed
+	t.Cleanup(func() {
+		executeBeadList = origList
+		expandBeadIsClosed = origClosed
+	})
+
+	beadA := &bead.Bead{ID: "A", ParentID: "ep1", Labels: []string{bead.LabelReady}}
+
+	executeBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{beadA}, nil
+	}
+	expandBeadIsClosed = func(id string) (bool, error) { return true, nil }
+
+	got, err := ClaimNextReady("ep2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil, got bead %q", got.ID)
+	}
+}
+
+// TC-CNR-4: epicID="ep1", A (parent=ep1) has dep X not closed → nil.
+func TestClaimNextReady_EpicFilter_DepNotClosed(t *testing.T) {
+	origList := executeBeadList
+	origClosed := expandBeadIsClosed
+	t.Cleanup(func() {
+		executeBeadList = origList
+		expandBeadIsClosed = origClosed
+	})
+
+	beadA := &bead.Bead{ID: "A", ParentID: "ep1", DependsOn: []string{"X"}, Labels: []string{bead.LabelReady}}
+
+	executeBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{beadA}, nil
+	}
+	// X is NOT closed.
+	expandBeadIsClosed = func(id string) (bool, error) {
+		if id == "X" {
+			return false, nil
+		}
+		return true, nil
+	}
+
+	got, err := ClaimNextReady("ep1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil (dep not closed), got bead %q", got.ID)
+	}
+}
+
+// TC-CNR-5: epicID="ep1", A (parent=ep1) has dep X closed → returns A.
+func TestClaimNextReady_EpicFilter_DepClosed(t *testing.T) {
+	origList := executeBeadList
+	origClosed := expandBeadIsClosed
+	t.Cleanup(func() {
+		executeBeadList = origList
+		expandBeadIsClosed = origClosed
+	})
+
+	beadA := &bead.Bead{ID: "A", ParentID: "ep1", DependsOn: []string{"X"}, Labels: []string{bead.LabelReady}}
+
+	executeBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{beadA}, nil
+	}
+	// X IS closed.
+	expandBeadIsClosed = func(id string) (bool, error) {
+		if id == "X" {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	got, err := ClaimNextReady("ep1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected bead A, got nil")
+	}
+	if got.ID != "A" {
+		t.Errorf("expected A, got %q", got.ID)
 	}
 }
 

@@ -24,6 +24,8 @@ var (
 	humanDoneEpicFn       = func(epicID, repoRoot string) error { return DoneEpic(epicID, repoRoot) }
 	humanWorktreePathFn   = func(repoRoot, id string) string { return worktree.WorktreePath(repoRoot, id) }
 	humanWorktreePathFromBead = func(b *bead.Bead) string { return bead.WorktreePathFromBead(b) }
+	// humanBeadList is used by EpicProgress and maybeCloseEpic.
+	humanBeadList = func(label string) ([]*bead.Bead, error) { return bead.List(label) }
 )
 
 // Mail prints a digest of beads that need human attention, grouped by label.
@@ -153,19 +155,20 @@ func Address(beadID string, opts AddressOptions) error {
 
 // Done squashes all worktree commits into one, pushes the branch, and closes the bead.
 // It refuses to proceed if REVIEW: markers remain in the worktree (issue #6).
-// For sub-beads it redirects to the parent epic; for epics it calls DoneEpic.
+// Sub-beads are redirected to their epic with an error.
+// Epic beads (with sub-beads) are routed to DoneEpic.
 func Done(beadID, repoRoot string) error {
 	b, err := humanBeadShow(beadID)
 	if err != nil {
 		return fmt.Errorf("done: fetch bead: %w", err)
 	}
 
-	// Sub-bead: redirect caller to the epic.
+	// Redirect sub-beads to their epic.
 	if b.ParentID != "" {
 		return fmt.Errorf("bead %s is a sub-bead of epic %s — run: sling done %s", beadID, b.ParentID, b.ParentID)
 	}
 
-	// Epic bead (has sub-beads): route to DoneEpic.
+	// Route epic beads to DoneEpic.
 	subBeads, err := humanListSubBeads(beadID)
 	if err != nil {
 		return fmt.Errorf("done: list sub-beads: %w", err)
@@ -174,7 +177,7 @@ func Done(beadID, repoRoot string) error {
 		return humanDoneEpicFn(beadID, repoRoot)
 	}
 
-	// Standalone bead: original logic.
+	// Standalone bead: existing logic.
 	wtPath := humanWorktreePathFromBead(b)
 	if wtPath == "" {
 		wtPath = humanWorktreePathFn(repoRoot, beadID)
@@ -217,7 +220,7 @@ func Done(beadID, repoRoot string) error {
 
 // DoneEpic squashes, pushes, and closes an epic together with all its sub-beads.
 // It refuses if any sub-bead is not in sling:review-pending or closed, or if
-// REVIEW: markers remain in the epic worktree.
+// any review markers remain in the epic worktree.
 func DoneEpic(epicID, repoRoot string) error {
 	epicBead, err := humanBeadShow(epicID)
 	if err != nil {
@@ -299,5 +302,57 @@ func DoneEpic(epicID, repoRoot string) error {
 	}
 
 	fmt.Printf("Epic %s is done. Branch %q pushed. Open a PR and merge manually.\n", epicID, branch)
+	return nil
+}
+
+// EpicProgress counts the child beads of epicID that are closed vs. the total.
+// It calls humanBeadList("") and filters by ParentID client-side.
+// Returns (0, 0, nil) when epicID is "".
+func EpicProgress(epicID string) (closed, total int, err error) {
+	if epicID == "" {
+		return 0, 0, nil
+	}
+	all, err := humanBeadList("")
+	if err != nil {
+		return 0, 0, fmt.Errorf("epic progress: list beads: %w", err)
+	}
+	for _, b := range all {
+		if b.ParentID != epicID {
+			continue
+		}
+		total++
+		if b.Status == bead.StatusClosed {
+			closed++
+		}
+	}
+	return closed, total, nil
+}
+
+// maybeCloseEpic closes the epic bead (status=closed, all sling: labels removed)
+// when every child bead is closed. It is a no-op when epicID is "", when
+// total == 0, or when any child is still open.
+func maybeCloseEpic(epicID string) error {
+	if epicID == "" {
+		return nil
+	}
+	closed, total, err := EpicProgress(epicID)
+	if err != nil {
+		return err
+	}
+	if total == 0 || closed < total {
+		return nil
+	}
+	// All children closed — close the epic.
+	if err := humanBeadSetStatus(epicID, bead.StatusClosed); err != nil {
+		return fmt.Errorf("maybeCloseEpic: close epic %s: %w", epicID, err)
+	}
+	// Remove all sling: labels (best-effort).
+	for _, label := range []string{
+		bead.LabelReviewPending, bead.LabelAddressing, bead.LabelExecuting,
+		bead.LabelPlanned, bead.LabelReady, bead.LabelFailed, bead.LabelBlocked,
+	} {
+		_ = humanBeadRemoveLabel(epicID, label)
+	}
+	fmt.Printf("🎉 Epic %s is complete! All %d beads are done.\n", epicID, total)
 	return nil
 }

@@ -12,6 +12,11 @@ import (
 	"github.com/aronasorman/sling/internal/worktree"
 )
 
+var (
+	nextEpicID string
+	nextLoop   bool
+)
+
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "Claim the next sling:ready bead and execute it in a jj worktree",
@@ -21,6 +26,8 @@ var nextCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(nextCmd)
+	nextCmd.Flags().StringVar(&nextEpicID, "epic", "", "Restrict execution to beads of this epic ID")
+	nextCmd.Flags().BoolVar(&nextLoop, "loop", false, "Keep executing beads until none remain")
 }
 
 func runNext(cmd *cobra.Command, args []string) error {
@@ -43,14 +50,17 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	contextFiles := loadContextFiles(cfg, repoRoot)
 
-	result, err := pipeline.ClaimAndExecute(pipeline.ExecuteOptions{
+	opts := pipeline.ExecuteOptions{
 		RepoRoot:        repoRoot,
 		MaxAttempts:     cfg.Execution.MaxAttempts,
 		ReviewMaxRounds: cfg.Execution.ReviewMaxRounds,
 		SpecMaxTurns:    cfg.Execution.SpecMaxTurns,
 		Notifier:        notifier,
 		ContextFiles:    contextFiles,
-	})
+		EpicID:          nextEpicID,
+	}
+
+	result, err := pipeline.ClaimAndExecute(opts)
 	if err != nil {
 		return fmt.Errorf("execute: %w", err)
 	}
