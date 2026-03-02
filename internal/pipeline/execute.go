@@ -121,7 +121,7 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 			SystemPrompt: systemPrompt,
 			UserPrompt:   userPrompt,
 			Model:        agent.ModelSonnet,
-			MaxTurns:     50,
+			MaxTurns:     100,
 			Env:          map[string]string{"SLING_BEAD_ID": b.ID},
 		})
 		if err != nil {
