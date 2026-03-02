@@ -251,6 +251,7 @@ const (
 	LabelAddressing    = "sling:addressing"
 	LabelFailed        = "sling:failed"
 	LabelBlocked       = "sling:blocked"
+	LabelEscalated     = "sling:escalated"
 )
 
 const (

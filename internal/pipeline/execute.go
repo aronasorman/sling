@@ -297,14 +297,10 @@ func truncateLast(s string, n int) string {
 // ─── Epic execution types ─────────────────────────────────────────────────────
 
 // EpicExecuteOptions configures ExecuteEpic.
-// REVIEW: No MaxAttempts field, so ExecuteEpic has no retry loop. A single agent
-// error immediately fails the entire epic, while the standalone Execute path retries
-// up to MaxAttempts (default 3) times. If this asymmetry is intentional (epics too
-// expensive to retry), add a comment explaining the decision; otherwise add MaxAttempts
-// here and a corresponding retry loop in ExecuteEpic (mirroring Execute's retry).
 type EpicExecuteOptions struct {
 	RepoRoot        string
 	EpicID          string
+	MaxAttempts     int
 	ReviewMaxRounds int
 	// SpecMaxTurns caps the number of agentic turns for the SpecAgent (0 → default 20).
 	SpecMaxTurns int
@@ -474,6 +470,7 @@ func ClaimAndExecute(opts ExecuteOptions) (*ClaimAndExecuteResult, error) {
 		epicOpts := EpicExecuteOptions{
 			EpicID:          candidate.ParentID,
 			RepoRoot:        opts.RepoRoot,
+			MaxAttempts:     opts.MaxAttempts,
 			ReviewMaxRounds: opts.ReviewMaxRounds,
 			SpecMaxTurns:    opts.SpecMaxTurns,
 			Notifier:        opts.Notifier,
@@ -635,20 +632,42 @@ func ExecuteEpic(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
 	// Build system prompt.
 	prompt := agent.EpicExecutorSystemPrompt(opts.EpicID, epicBead.Title, epicBead.Body, subBeadSpecs, opts.ContextFiles)
 
-	// Run executor agent.
-	agentErr := execAgentRun(agent.RunOptions{
-		WorkDir:      wt.Path,
-		SystemPrompt: prompt,
-		UserPrompt:   fmt.Sprintf("Implement the epic: %s", epicBead.Title),
-		Model:        agent.ModelSonnet,
-		MaxTurns:     100,
-		Env:          map[string]string{"SLING_EPIC_ID": opts.EpicID},
-	})
+	// Run executor agent with retry.
+	maxAttempts := opts.MaxAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 3
+	}
 
-	if agentErr != nil {
-		// Agent failed — mark everything failed and notify.
-		if swapErr := execBeadSwapLabel(opts.EpicID, bead.LabelFailed); swapErr != nil {
-			fmt.Printf("Warning: could not mark epic as failed: %v\n", swapErr)
+	var lastAgentErr error
+	agentSucceeded := false
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		fmt.Printf("Epic executor attempt %d/%d for epic %s\n", attempt, maxAttempts, opts.EpicID)
+
+		userPrompt := fmt.Sprintf("Implement the epic: %s", epicBead.Title)
+		if attempt >= 2 {
+			userPrompt = fmt.Sprintf("⚠️ RETRY ATTEMPT %d: A previous attempt did not complete successfully. Implement the epic, ensure all tests pass, and commit your changes.\n\n", attempt) + userPrompt
+		}
+
+		lastAgentErr = execAgentRun(agent.RunOptions{
+			WorkDir:      wt.Path,
+			SystemPrompt: prompt,
+			UserPrompt:   userPrompt,
+			Model:        agent.ModelSonnet,
+			MaxTurns:     100,
+			Env:          map[string]string{"SLING_EPIC_ID": opts.EpicID},
+		})
+		if lastAgentErr == nil {
+			agentSucceeded = true
+			break
+		}
+		fmt.Printf("Epic agent exited with error on attempt %d: %v\n", attempt, lastAgentErr)
+	}
+
+	if !agentSucceeded {
+		// All attempts exhausted — escalate.
+		escalateLabel := bead.LabelEscalated
+		if swapErr := execBeadSwapLabel(opts.EpicID, escalateLabel); swapErr != nil {
+			fmt.Printf("Warning: could not mark epic as escalated: %v\n", swapErr)
 		}
 		for _, id := range claimedIDs {
 			if swapErr := execBeadSwapLabel(id, bead.LabelFailed); swapErr != nil {
@@ -656,9 +675,9 @@ func ExecuteEpic(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
 			}
 		}
 		if opts.Notifier != nil {
-			_ = opts.Notifier.Send(fmt.Sprintf("Sling: epic %q FAILED. ID: %s", epicBead.Title, opts.EpicID))
+			_ = opts.Notifier.Send(fmt.Sprintf("Sling: epic %q ESCALATED after %d attempts — needs human intervention. ID: %s", epicBead.Title, maxAttempts, opts.EpicID))
 		}
-		return &EpicExecuteResult{EpicID: opts.EpicID, WtPath: wt.Path, BeadIDs: claimedIDs, Succeeded: false}, agentErr
+		return &EpicExecuteResult{EpicID: opts.EpicID, WtPath: wt.Path, BeadIDs: claimedIDs, Succeeded: false}, lastAgentErr
 	}
 
 	// 1. Determine gate config.
