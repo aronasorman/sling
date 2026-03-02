@@ -124,6 +124,9 @@ type ExecuteOptions struct {
 	ContextFiles map[string]string
 	// EpicID when non-empty restricts ClaimNextReady to beads with ParentID == EpicID.
 	EpicID string
+	// BuildGate configures the build+test gate for epic execution.
+	// Zero value → AutoDetectBuildConfig is called at runtime.
+	BuildGate BuildGateConfig
 }
 
 // ExecuteResult is returned after execution completes.
@@ -268,9 +271,37 @@ func Execute(opts ExecuteOptions) (*ExecuteResult, error) {
 	return &ExecuteResult{BeadID: b.ID, WtPath: wt.Path, Succeeded: false}, lastErr
 }
 
+// ─── AutoDetectBuildConfig ────────────────────────────────────────────────────
+
+// AutoDetectBuildConfig returns a BuildGateConfig inferred from the project
+// layout under wtPath. Currently detects Go modules (go.mod present).
+// Returns a zero-value BuildGateConfig (Skipped) when no project type is detected.
+func AutoDetectBuildConfig(wtPath string) BuildGateConfig {
+	if _, err := os.Stat(filepath.Join(wtPath, "go.mod")); err == nil {
+		return BuildGateConfig{
+			BuildCmd: "go build ./...",
+			TestCmd:  "go test ./...",
+		}
+	}
+	return BuildGateConfig{}
+}
+
+// truncateLast returns the last n bytes of s, or s itself if len(s) <= n.
+func truncateLast(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
+}
+
 // ─── Epic execution types ─────────────────────────────────────────────────────
 
 // EpicExecuteOptions configures ExecuteEpic.
+// REVIEW: No MaxAttempts field, so ExecuteEpic has no retry loop. A single agent
+// error immediately fails the entire epic, while the standalone Execute path retries
+// up to MaxAttempts (default 3) times. If this asymmetry is intentional (epics too
+// expensive to retry), add a comment explaining the decision; otherwise add MaxAttempts
+// here and a corresponding retry loop in ExecuteEpic (mirroring Execute's retry).
 type EpicExecuteOptions struct {
 	RepoRoot        string
 	EpicID          string
@@ -279,6 +310,9 @@ type EpicExecuteOptions struct {
 	SpecMaxTurns int
 	Notifier     *notify.Notifier
 	ContextFiles map[string]string
+	// BuildGate configures the build+test gate run after executor success.
+	// Zero value → AutoDetectBuildConfig is called at runtime.
+	BuildGate BuildGateConfig
 }
 
 // EpicExecuteResult is returned by ExecuteEpic.
@@ -316,6 +350,16 @@ var (
 	}
 	execRunAutoReview = func(beadID, wtPath string, opts AutoReviewOptions) error {
 		return RunAutomatedReview(beadID, wtPath, opts)
+	}
+
+	// execRunBuildGate is called after executor success in ExecuteEpic.
+	execRunBuildGate = func(wtPath string, cfg BuildGateConfig) (*BuildGateResult, error) {
+		return RunBuildGate(wtPath, cfg)
+	}
+
+	// execRunEpicHolisticReview replaces execRunAutoReview in the epic path.
+	execRunEpicHolisticReview = func(epicID, wtPath string, opts EpicHolisticReviewOptions) error {
+		return RunEpicHolisticReview(epicID, wtPath, opts)
 	}
 
 	// Routing for ClaimAndExecute.
@@ -434,6 +478,7 @@ func ClaimAndExecute(opts ExecuteOptions) (*ClaimAndExecuteResult, error) {
 			SpecMaxTurns:    opts.SpecMaxTurns,
 			Notifier:        opts.Notifier,
 			ContextFiles:    opts.ContextFiles,
+			BuildGate:       opts.BuildGate,
 		}
 		epicResult, epicErr := execRouteEpic(epicOpts)
 		if epicErr != nil {
@@ -441,6 +486,17 @@ func ClaimAndExecute(opts ExecuteOptions) (*ClaimAndExecuteResult, error) {
 		}
 		return &ClaimAndExecuteResult{IsEpic: true, EpicID: candidate.ParentID, Succeeded: epicResult.Succeeded}, nil
 	}
+
+	// REVIEW: TOCTOU double-claim on the standalone path. execClaimNextReady above
+	// only peeks (does not claim) the bead; execRouteStandalone → Execute calls
+	// ClaimNextReady again internally and claims whichever bead is still sling:ready
+	// at that moment. In a concurrent setup another worker could claim the peeked
+	// bead in the window between the two calls, causing Execute to claim a different
+	// bead than the one used for routing — or find nothing at all and return
+	// {Succeeded:false} with an empty BeadID, which next.go then misreports.
+	// The epic path avoids this because ExecuteEpic does its own claiming; the
+	// standalone path should either atomically claim in ClaimAndExecute, or drop
+	// the peek entirely and let Execute handle routing when candidate.ParentID=="".
 
 	// Standalone bead.
 	execResult, execErr := execRouteStandalone(opts)
@@ -605,7 +661,51 @@ func ExecuteEpic(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
 		return &EpicExecuteResult{EpicID: opts.EpicID, WtPath: wt.Path, BeadIDs: claimedIDs, Succeeded: false}, agentErr
 	}
 
-	// Agent succeeded — transition sub-beads and epic to review-pending.
+	// 1. Determine gate config.
+	gateConfig := opts.BuildGate
+	if gateConfig.BuildCmd == "" && gateConfig.TestCmd == "" {
+		gateConfig = AutoDetectBuildConfig(wt.Path)
+	}
+
+	// 2. Run build+test gate.
+	gateResult, gateErr := execRunBuildGate(wt.Path, gateConfig)
+	gatePassed := gateErr == nil && (gateResult == nil || gateResult.Skipped ||
+		(gateResult.BuildPassed && gateResult.TestPassed))
+
+	if !gatePassed {
+		// Compose a diagnostic message.
+		msg := fmt.Sprintf("Sling: epic %q FAILED build/test gate. ID: %s", epicBead.Title, opts.EpicID)
+		if gateResult != nil {
+			if !gateResult.BuildPassed {
+				msg += fmt.Sprintf("\nBuild output (last 500 chars):\n%s",
+					truncateLast(gateResult.BuildOutput, 500))
+			} else if !gateResult.TestPassed {
+				msg += fmt.Sprintf("\nTest output (last 500 chars):\n%s",
+					truncateLast(gateResult.TestOutput, 500))
+			}
+		}
+		fmt.Println(msg)
+
+		if swapErr := execBeadSwapLabel(opts.EpicID, bead.LabelFailed); swapErr != nil {
+			fmt.Printf("Warning: could not mark epic as failed: %v\n", swapErr)
+		}
+		for _, id := range claimedIDs {
+			if swapErr := execBeadSwapLabel(id, bead.LabelFailed); swapErr != nil {
+				fmt.Printf("Warning: could not mark sub-bead %s as failed: %v\n", id, swapErr)
+			}
+		}
+		if opts.Notifier != nil {
+			_ = opts.Notifier.Send(msg)
+		}
+		return &EpicExecuteResult{
+			EpicID:    opts.EpicID,
+			WtPath:    wt.Path,
+			BeadIDs:   claimedIDs,
+			Succeeded: false,
+		}, gateErr
+	}
+
+	// 3. Transition sub-beads and epic to review-pending.
 	for _, id := range claimedIDs {
 		if swapErr := execBeadSwapLabel(id, bead.LabelReviewPending); swapErr != nil {
 			fmt.Printf("Warning: could not mark sub-bead %s as review-pending: %v\n", id, swapErr)
@@ -615,13 +715,18 @@ func ExecuteEpic(opts EpicExecuteOptions) (*EpicExecuteResult, error) {
 		fmt.Printf("Warning: could not mark epic as review-pending: %v\n", swapErr)
 	}
 
-	// Run automated review (best-effort).
-	if reviewErr := execRunAutoReview(opts.EpicID, wt.Path, AutoReviewOptions{
-		MaxRounds:    opts.ReviewMaxRounds,
-		Notifier:     opts.Notifier,
-		ContextFiles: opts.ContextFiles,
+	// 4. Run holistic review (replaces execRunAutoReview for the epic path).
+	if reviewErr := execRunEpicHolisticReview(opts.EpicID, wt.Path, EpicHolisticReviewOptions{
+		AutoReviewOptions: AutoReviewOptions{
+			MaxRounds:    opts.ReviewMaxRounds,
+			Notifier:     opts.Notifier,
+			ContextFiles: opts.ContextFiles,
+		},
+		EpicTitle: epicBead.Title,
+		EpicBody:  epicBead.Body,
+		SubBeads:  subBeadSpecs,
 	}); reviewErr != nil {
-		fmt.Printf("Warning: automated review error: %v\n", reviewErr)
+		fmt.Printf("Warning: holistic review error: %v\n", reviewErr)
 	}
 
 	return &EpicExecuteResult{EpicID: opts.EpicID, WtPath: wt.Path, BeadIDs: claimedIDs, Succeeded: true}, nil

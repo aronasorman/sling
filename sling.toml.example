@@ -8,6 +8,10 @@ linear_team = "ENG"            # if using Linear
 [execution]
 max_attempts = 3
 review_max_rounds = 3
+# Optional: shell commands run in the epic worktree after the executor finishes.
+# If omitted, sling auto-detects Go projects (go build ./... + go test ./...).
+# build_cmd = "go build ./..."
+# test_cmd  = "go test -count=1 ./..."
 
 [context]
 conventions = "docs/CONVENTIONS.md"

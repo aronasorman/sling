@@ -34,6 +34,12 @@ type ExecutionConfig struct {
 	ReviewMaxRounds int `mapstructure:"review_max_rounds"`
 	// SpecMaxTurns caps SpecAgent agentic turns (0 → default 20).
 	SpecMaxTurns int `mapstructure:"spec_max_turns"`
+	// BuildCmd is the shell command executed to verify the build (e.g. "go build ./...").
+	// Empty string = skipped (rely on per-bead executor tests).
+	BuildCmd string `mapstructure:"build_cmd"`
+	// TestCmd is the shell command executed after a successful build (e.g. "go test ./...").
+	// Empty string = skipped.
+	TestCmd string `mapstructure:"test_cmd"`
 }
 
 type ContextConfig struct {

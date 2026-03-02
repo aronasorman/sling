@@ -255,6 +255,70 @@ func EpicExecutorSystemPrompt(
 	return sb.String()
 }
 
+// EpicReviewerSystemPrompt returns the system prompt for holistic epic review.
+// The Reviewer is given the full epic context (title, body, sub-bead specs) and
+// is instructed to look for cross-bead integration issues in addition to
+// per-file defects.
+//
+// Parameters:
+//
+//	epicTitle    – displayed as the review target
+//	epicBody     – the original epic description / acceptance criteria
+//	subBeads     – ordered list of sub-beads with their specs (may be empty)
+//	contextFiles – additional project context (same map used by other prompts)
+func EpicReviewerSystemPrompt(
+	epicTitle, epicBody string,
+	subBeads []EpicSubBeadSpec,
+	contextFiles map[string]string,
+) string {
+	var sb strings.Builder
+	sb.WriteString("You are Sling's Reviewer agent. Your job is to holistically review the\n")
+	sb.WriteString("implementation of the epic described below.\n\n")
+	sb.WriteString(fmt.Sprintf("## Epic: %s\n\n%s\n\n", epicTitle, epicBody))
+
+	if len(subBeads) > 0 {
+		sb.WriteString("## Sub-beads implemented (for context)\n\n")
+		for i, sp := range subBeads {
+			sb.WriteString(fmt.Sprintf("### Sub-bead %d: %s (ID: %s)\n\n%s\n\n", i+1, sp.Title, sp.ID, sp.Body))
+			if sp.Spec != "" {
+				sb.WriteString("#### Technical spec\n\n")
+				sb.WriteString(sp.Spec)
+				sb.WriteString("\n\n")
+			}
+		}
+	}
+
+	sb.WriteString("## Review process\n\n")
+	sb.WriteString("1. Run `jj diff` to see all changes across the entire epic.\n")
+	sb.WriteString("2. Examine each file thoroughly. Look for:\n")
+	sb.WriteString("   - Bugs, missing tests, security issues, style violations (per-file).\n")
+	sb.WriteString("   - Integration issues: do the sub-beads fit together correctly?\n")
+	sb.WriteString("   - API consistency: naming, return types, error patterns uniform?\n")
+	sb.WriteString("   - Missing cross-bead integration tests.\n")
+	sb.WriteString("   - Architectural drift: does any sub-bead violate the overall design?\n")
+	sb.WriteString("3. For each issue, add a REVIEW: marker comment directly in the relevant file.\n")
+	sb.WriteString("   Use the appropriate comment syntax for the language:\n")
+	sb.WriteString("   - Go/JS/TS/Rust/C: `// REVIEW: <description>`\n")
+	sb.WriteString("   - Python/Shell:    `# REVIEW: <description>`\n")
+	sb.WriteString("   - SQL:             `-- REVIEW: <description>`\n")
+	sb.WriteString("   - HTML:            `<!-- REVIEW: <description> -->`\n")
+	sb.WriteString("4. Create a commit with `jj commit -m 'review: <brief summary>'`.\n")
+	sb.WriteString("5. If the implementation is clean and correct, write nothing and exit.\n\n")
+	sb.WriteString("## Rules\n\n")
+	sb.WriteString("- Be thorough and adversarial. Your job is to find problems.\n")
+	sb.WriteString("- Consider the sub-beads as a whole — not just individually.\n")
+	sb.WriteString("- Only add REVIEW: markers for real issues. Don't nit-pick style that doesn't matter.\n\n")
+
+	if len(contextFiles) > 0 {
+		sb.WriteString("## Project context\n\n")
+		for name, content := range contextFiles {
+			sb.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", name, content))
+		}
+	}
+
+	return sb.String()
+}
+
 // AddresserSystemPrompt returns the system prompt for the Addresser agent.
 // It resolves all REVIEW: markers in the worktree.
 func AddresserSystemPrompt(beadTitle string, contextFiles map[string]string) string {

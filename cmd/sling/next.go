@@ -14,7 +14,11 @@ import (
 
 var (
 	nextEpicID string
-	nextLoop   bool
+	// REVIEW: nextLoop is declared and the --loop flag is registered below, but runNext
+	// never reads it — the looping was dropped when the function switched to a single
+	// ClaimAndExecute call. sling next --loop is silently identical to sling next.
+	// Either implement the loop or remove the var+flag.
+	nextLoop bool
 )
 
 var nextCmd = &cobra.Command{
@@ -58,6 +62,10 @@ func runNext(cmd *cobra.Command, args []string) error {
 		Notifier:        notifier,
 		ContextFiles:    contextFiles,
 		EpicID:          nextEpicID,
+		BuildGate: pipeline.BuildGateConfig{
+			BuildCmd: cfg.Execution.BuildCmd,
+			TestCmd:  cfg.Execution.TestCmd,
+		},
 	}
 
 	result, err := pipeline.ClaimAndExecute(opts)
@@ -71,6 +79,16 @@ func runNext(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		if result.IsEpic {
+			// REVIEW: When ExecuteEpic returns {EpicID:"X", Succeeded:false} because
+			// no sub-beads were ready (not a real failure), ClaimAndExecute still
+			// surfaces it here with IsEpic=true and EpicID set. This branch then
+			// returns a non-nil error "epic X failed", giving the caller a non-zero
+			// exit code and a misleading error message for a normal "nothing to do"
+			// case. The guard above (BeadID=="" && EpicID=="") does not fire because
+			// EpicID IS set. Need a separate "no work to do" signal in
+			// ClaimAndExecuteResult (e.g. a NoWork bool), or check whether the
+			// Succeeded:false originated from a "no ready sub-beads" path vs. a real
+			// agent failure.
 			return fmt.Errorf("epic %s failed", result.EpicID)
 		}
 		return fmt.Errorf("bead %s failed", result.BeadID)
