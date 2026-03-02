@@ -9,6 +9,23 @@ import (
 	"github.com/aronasorman/sling/internal/worktree"
 )
 
+// Injectable function variables for human.go (overridden in tests).
+var (
+	humanBeadShow           = func(id string) (*bead.Bead, error) { return bead.Show(id) }
+	humanListSubBeads       = func(epicID string) ([]*bead.Bead, error) { return ListSubBeads(epicID) }
+	humanHasReviewMarkers   = func(dir string) (bool, error) { return HasReviewMarkers(dir) }
+	humanWorktreeSquash     = func(wtPath, msg string) error { return worktree.Squash(wtPath, msg) }
+	humanWorktreePushBranch = func(wtPath, branch, remote string) error {
+		return worktree.PushBranch(wtPath, branch, remote)
+	}
+	humanWorktreeRemove   = func(repoRoot, id string) error { return worktree.Remove(repoRoot, id) }
+	humanBeadSetStatus    = func(id, status string) error { return bead.SetStatus(id, status) }
+	humanBeadRemoveLabel  = func(id, label string) error { return bead.RemoveLabel(id, label) }
+	humanDoneEpicFn       = func(epicID, repoRoot string) error { return DoneEpic(epicID, repoRoot) }
+	humanWorktreePathFn   = func(repoRoot, id string) string { return worktree.WorktreePath(repoRoot, id) }
+	humanWorktreePathFromBead = func(b *bead.Bead) string { return bead.WorktreePathFromBead(b) }
+)
+
 // Mail prints a digest of beads that need human attention, grouped by label.
 func Mail() error {
 	type section struct {
@@ -136,18 +153,34 @@ func Address(beadID string, opts AddressOptions) error {
 
 // Done squashes all worktree commits into one, pushes the branch, and closes the bead.
 // It refuses to proceed if REVIEW: markers remain in the worktree (issue #6).
+// For sub-beads it redirects to the parent epic; for epics it calls DoneEpic.
 func Done(beadID, repoRoot string) error {
-	b, err := bead.Show(beadID)
+	b, err := humanBeadShow(beadID)
 	if err != nil {
 		return fmt.Errorf("done: fetch bead: %w", err)
 	}
 
-	wtPath := bead.WorktreePathFromBead(b)
-	if wtPath == "" {
-		wtPath = worktree.WorktreePath(repoRoot, beadID)
+	// Sub-bead: redirect caller to the epic.
+	if b.ParentID != "" {
+		return fmt.Errorf("bead %s is a sub-bead of epic %s — run: sling done %s", beadID, b.ParentID, b.ParentID)
 	}
 
-	hasMarkers, err := HasReviewMarkers(wtPath)
+	// Epic bead (has sub-beads): route to DoneEpic.
+	subBeads, err := humanListSubBeads(beadID)
+	if err != nil {
+		return fmt.Errorf("done: list sub-beads: %w", err)
+	}
+	if len(subBeads) > 0 {
+		return humanDoneEpicFn(beadID, repoRoot)
+	}
+
+	// Standalone bead: original logic.
+	wtPath := humanWorktreePathFromBead(b)
+	if wtPath == "" {
+		wtPath = humanWorktreePathFn(repoRoot, beadID)
+	}
+
+	hasMarkers, err := humanHasReviewMarkers(wtPath)
 	if err != nil {
 		return fmt.Errorf("done: check review markers: %w", err)
 	}
@@ -157,15 +190,15 @@ func Done(beadID, repoRoot string) error {
 
 	branch := "sling/" + beadID
 	squashMsg := fmt.Sprintf("feat(%s): %s", beadID, b.Title)
-	if err := worktree.Squash(wtPath, squashMsg); err != nil {
+	if err := humanWorktreeSquash(wtPath, squashMsg); err != nil {
 		return fmt.Errorf("done: squash: %w", err)
 	}
 
-	if err := worktree.PushBranch(wtPath, branch, "origin"); err != nil {
+	if err := humanWorktreePushBranch(wtPath, branch, "origin"); err != nil {
 		return fmt.Errorf("done: push branch: %w", err)
 	}
 
-	if err := bead.SetStatus(beadID, bead.StatusClosed); err != nil {
+	if err := humanBeadSetStatus(beadID, bead.StatusClosed); err != nil {
 		return fmt.Errorf("done: close bead: %w", err)
 	}
 
@@ -174,17 +207,97 @@ func Done(beadID, repoRoot string) error {
 		bead.LabelReviewPending, bead.LabelAddressing, bead.LabelExecuting,
 		bead.LabelPlanned, bead.LabelReady, bead.LabelFailed, bead.LabelBlocked,
 	} {
-		_ = bead.RemoveLabel(beadID, label)
+		_ = humanBeadRemoveLabel(beadID, label)
 	}
 
 	fmt.Printf("Bead %s is done. Branch %q pushed. Open a PR and merge manually.\n", beadID, branch)
 
-	// Promote any beads that now have all deps closed.
-	if b.ParentID != "" {
-		if err := PromoteReadyBeads(b.ParentID); err != nil {
-			fmt.Printf("Warning: could not promote ready beads: %v\n", err)
+	return nil
+}
+
+// DoneEpic squashes, pushes, and closes an epic together with all its sub-beads.
+// It refuses if any sub-bead is not in sling:review-pending or closed, or if
+// REVIEW: markers remain in the epic worktree.
+func DoneEpic(epicID, repoRoot string) error {
+	epicBead, err := humanBeadShow(epicID)
+	if err != nil {
+		return fmt.Errorf("done-epic: fetch epic bead: %w", err)
+	}
+	if epicBead.ParentID != "" {
+		return fmt.Errorf("done-epic: bead %s is a sub-bead (ParentID=%s) — run: sling done %s", epicID, epicBead.ParentID, epicBead.ParentID)
+	}
+
+	subBeads, err := humanListSubBeads(epicID)
+	if err != nil {
+		return fmt.Errorf("done-epic: list sub-beads: %w", err)
+	}
+
+	// Validate all sub-beads are review-pending or already closed.
+	for _, sb := range subBeads {
+		if sb.Status == bead.StatusClosed {
+			continue
+		}
+		if bead.HasLabel(sb, bead.LabelReviewPending) {
+			continue
+		}
+		return fmt.Errorf("done-epic: sub-bead %s is in state %v — not ready for done", sb.ID, sb.Labels)
+	}
+
+	// Determine worktree path.
+	wtPath := humanWorktreePathFromBead(epicBead)
+	if wtPath == "" {
+		wtPath = humanWorktreePathFn(repoRoot, epicID)
+	}
+
+	// Refuse if REVIEW: markers remain.
+	hasMarkers, err := humanHasReviewMarkers(wtPath)
+	if err != nil {
+		return fmt.Errorf("done-epic: check review markers: %w", err)
+	}
+	if hasMarkers {
+		return fmt.Errorf("REVIEW: markers still exist in worktree %s — run `sling address %s` first", wtPath, epicID)
+	}
+
+	branch := "sling/" + epicID
+	squashMsg := fmt.Sprintf("feat(%s): %s", epicID, epicBead.Title)
+	if err := humanWorktreeSquash(wtPath, squashMsg); err != nil {
+		return fmt.Errorf("done-epic: squash: %w", err)
+	}
+
+	if err := humanWorktreePushBranch(wtPath, branch, "origin"); err != nil {
+		return fmt.Errorf("done-epic: push branch: %w", err)
+	}
+
+	// Close each sub-bead that is not already closed.
+	allSlingLabels := []string{
+		bead.LabelReviewPending, bead.LabelAddressing, bead.LabelExecuting,
+		bead.LabelPlanned, bead.LabelReady, bead.LabelFailed, bead.LabelBlocked,
+	}
+	for _, sb := range subBeads {
+		if sb.Status == bead.StatusClosed {
+			continue
+		}
+		if err := humanBeadSetStatus(sb.ID, bead.StatusClosed); err != nil {
+			fmt.Printf("Warning: could not close sub-bead %s: %v\n", sb.ID, err)
+		}
+		for _, label := range allSlingLabels {
+			_ = humanBeadRemoveLabel(sb.ID, label)
 		}
 	}
 
+	// Close the epic.
+	if err := humanBeadSetStatus(epicID, bead.StatusClosed); err != nil {
+		return fmt.Errorf("done-epic: close epic bead: %w", err)
+	}
+	for _, label := range allSlingLabels {
+		_ = humanBeadRemoveLabel(epicID, label)
+	}
+
+	// Clean up the shared worktree.
+	if err := humanWorktreeRemove(repoRoot, epicID); err != nil {
+		fmt.Printf("Warning: could not remove worktree for epic %s: %v\n", epicID, err)
+	}
+
+	fmt.Printf("Epic %s is done. Branch %q pushed. Open a PR and merge manually.\n", epicID, branch)
 	return nil
 }

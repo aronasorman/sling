@@ -204,6 +204,59 @@ func SpecAgentSystemPrompt(beadTitle, beadBody, specFile string, contextFiles ma
 	return sb.String()
 }
 
+// EpicSubBeadSpec holds data for one sub-bead in the epic executor prompt.
+type EpicSubBeadSpec struct {
+	ID    string // bead ID
+	Title string
+	Body  string
+	Spec  string // spec agent output, or "" if not available
+}
+
+// EpicExecutorSystemPrompt builds the system prompt for the epic Executor agent.
+// subBeads must be in topological order (dependencies first).
+// epicID is included as an informational reference only; the orchestrator
+// handles all label transitions — the agent does NOT call sling signal-done.
+func EpicExecutorSystemPrompt(
+	epicID, epicTitle, epicBody string,
+	subBeads []EpicSubBeadSpec,
+	contextFiles map[string]string,
+) string {
+	var sb strings.Builder
+	sb.WriteString("You are Sling's Executor agent. Your job is to implement all beads in the epic described below.\n\n")
+	sb.WriteString(fmt.Sprintf("## Epic: %s (ID: %s)\n\n%s\n\n", epicTitle, epicID, epicBody))
+	sb.WriteString("## Beads to implement (implement in the order listed; dependencies are pre-resolved)\n\n")
+
+	for i, sp := range subBeads {
+		sb.WriteString(fmt.Sprintf("### Bead %d: %s (ID: %s)\n\n%s\n\n", i+1, sp.Title, sp.ID, sp.Body))
+		if sp.Spec != "" {
+			sb.WriteString("#### Technical spec\n\n")
+			sb.WriteString(sp.Spec)
+			sb.WriteString("\n\n")
+		}
+	}
+
+	sb.WriteString("## Rules\n\n")
+	sb.WriteString("- Implement each bead in the exact order listed above.\n")
+	sb.WriteString("- After implementing each bead, commit with jj:\n")
+	sb.WriteString("    jj commit -m \"feat: <bead title>\"\n")
+	sb.WriteString("- Run `go test ./...` (or the project's test command) after each bead.\n")
+	sb.WriteString("- All beads share this single worktree and branch; do NOT create separate branches.\n")
+	sb.WriteString("- The orchestrator handles all signaling automatically when you are done.\n\n")
+
+	if len(contextFiles) > 0 {
+		sb.WriteString("## Project context\n\n")
+		for name, content := range contextFiles {
+			sb.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", name, content))
+		}
+	}
+
+	sb.WriteString("## Done condition\n\n")
+	sb.WriteString("When all beads are implemented, all tests pass, and all changes are committed, you are done.\n")
+	sb.WriteString(fmt.Sprintf("Epic ID: %s\n", epicID))
+
+	return sb.String()
+}
+
 // AddresserSystemPrompt returns the system prompt for the Addresser agent.
 // It resolves all REVIEW: markers in the worktree.
 func AddresserSystemPrompt(beadTitle string, contextFiles map[string]string) string {

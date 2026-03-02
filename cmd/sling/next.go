@@ -43,7 +43,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	contextFiles := loadContextFiles(cfg, repoRoot)
 
-	result, err := pipeline.Execute(pipeline.ExecuteOptions{
+	result, err := pipeline.ClaimAndExecute(pipeline.ExecuteOptions{
 		RepoRoot:        repoRoot,
 		MaxAttempts:     cfg.Execution.MaxAttempts,
 		ReviewMaxRounds: cfg.Execution.ReviewMaxRounds,
@@ -56,12 +56,20 @@ func runNext(cmd *cobra.Command, args []string) error {
 	}
 
 	if !result.Succeeded {
-		if result.BeadID == "" {
-			return nil // nothing to do
+		// Nothing to do (no ready beads).
+		if result.BeadID == "" && result.EpicID == "" {
+			return nil
+		}
+		if result.IsEpic {
+			return fmt.Errorf("epic %s failed", result.EpicID)
 		}
 		return fmt.Errorf("bead %s failed", result.BeadID)
 	}
 
-	fmt.Printf("Bead %s is now sling:review-pending.\n", result.BeadID)
+	if result.IsEpic {
+		fmt.Printf("Epic %s is now sling:review-pending.\n", result.EpicID)
+	} else {
+		fmt.Printf("Bead %s is now sling:review-pending.\n", result.BeadID)
+	}
 	return nil
 }
