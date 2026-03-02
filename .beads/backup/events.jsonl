@@ -212,17 +212,30 @@
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:53:41Z","event_type":"closed","id":209,"issue_id":"sl-wisp-wisp-wse1","new_value":"Queue empty - 0 branches merged","old_value":""}
 {"actor":"sling/refinery","comment":null,"created_at":"2026-03-01T22:00:12Z","event_type":"created","id":210,"issue_id":"sl-07o","new_value":"","old_value":""}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:53:41Z","event_type":"closed","id":210,"issue_id":"sl-wisp-wisp-90ti","new_value":"Auto-land disabled","old_value":""}
+{"actor":"sling/refinery","comment":"Removed label: gt:rig","created_at":"2026-03-01T22:50:22Z","event_type":"label_removed","id":211,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:53:45Z","event_type":"closed","id":211,"issue_id":"sl-wisp-wisp-17s7","new_value":"Session healthy: RSS 3MB. Continue.","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: gt:rig","created_at":"2026-03-01T22:50:22Z","event_type":"label_added","id":212,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:53:45Z","event_type":"closed","id":212,"issue_id":"sl-wisp-wisp-qzej","new_value":"Inbox clean, no open MR beads.","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: backoff-until:1772434252","created_at":"2026-03-01T22:50:22Z","event_type":"label_added","id":213,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:53:45Z","event_type":"closed","id":213,"issue_id":"sl-wisp-wisp-u3tw","new_value":"Awaiting events","old_value":""}
+{"actor":"sling/refinery","comment":"Removed label: backoff-until:1772434252","created_at":"2026-03-01T22:50:52Z","event_type":"label_removed","id":214,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
+{"actor":"sling/refinery","comment":"Removed label: gt:rig","created_at":"2026-03-01T22:50:52Z","event_type":"label_removed","id":215,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:41Z","event_type":"closed","id":215,"issue_id":"sl-wisp-wisp-31j1","new_value":"Inbox clean (0 messages).","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: backoff-until:1772434252","created_at":"2026-03-01T22:50:52Z","event_type":"label_added","id":216,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:51Z","event_type":"closed","id":216,"issue_id":"sl-wisp-wisp-bbex","new_value":"Queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: gt:rig","created_at":"2026-03-01T22:50:52Z","event_type":"label_added","id":217,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:51Z","event_type":"closed","id":217,"issue_id":"sl-wisp-wisp-vq32","new_value":"Skipped - queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: idle:1","created_at":"2026-03-01T22:50:52Z","event_type":"label_added","id":218,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:51Z","event_type":"closed","id":218,"issue_id":"sl-wisp-wisp-j22b","new_value":"Skipped - queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Removed label: backoff-until:1772434252","created_at":"2026-03-01T22:50:52Z","event_type":"label_removed","id":219,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:52Z","event_type":"closed","id":219,"issue_id":"sl-wisp-wisp-qlqo","new_value":"Skipped - queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Removed label: gt:rig","created_at":"2026-03-01T22:50:52Z","event_type":"label_removed","id":220,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:52Z","event_type":"closed","id":220,"issue_id":"sl-wisp-wisp-b87k","new_value":"Skipped - queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Removed label: idle:1","created_at":"2026-03-01T22:50:52Z","event_type":"label_removed","id":221,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:52Z","event_type":"closed","id":221,"issue_id":"sl-wisp-wisp-fubu","new_value":"Skipped - queue empty","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: gt:rig","created_at":"2026-03-01T22:50:52Z","event_type":"label_added","id":222,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:52Z","event_type":"closed","id":222,"issue_id":"sl-wisp-wisp-00lx","new_value":"Queue empty - 0 branches merged","old_value":""}
+{"actor":"sling/refinery","comment":"Added label: idle:1","created_at":"2026-03-01T22:50:52Z","event_type":"label_added","id":223,"issue_id":"sl-rig-sling","new_value":null,"old_value":null}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:52Z","event_type":"closed","id":223,"issue_id":"sl-wisp-wisp-067y","new_value":"Auto-land disabled","old_value":""}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:57Z","event_type":"closed","id":224,"issue_id":"sl-wisp-wisp-cj4b","new_value":"Session healthy: RSS 3MB. Continue.","old_value":""}
 {"actor":"sling/refinery","comment":"","created_at":"2026-03-01T21:54:57Z","event_type":"closed","id":225,"issue_id":"sl-wisp-wisp-v0s0","new_value":"Inbox clean, no open MR beads.","old_value":""}
@@ -281,6 +294,35 @@
 {"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:05:35Z","event_type":"closed","id":308,"issue_id":"sl-wisp-l40p","new_value":"Inbox empty.","old_value":""}
 {"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:05:35Z","event_type":"closed","id":309,"issue_id":"sl-wisp-e7bm","new_value":"No active sling polecats. Obsidian done/stopped.","old_value":""}
 {"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:05:35Z","event_type":"closed","id":310,"issue_id":"sl-wisp-uymp","new_value":"patrol_count=14 -\u003e 15 threshold. Handing off.","old_value":""}
-{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:23:32Z","event_type":"closed","id":328,"issue_id":"sl-wisp-zqfj","new_value":"patrol cycle complete: Patrol 4: No active polecats. Deacon alive. System idle.","old_value":""}
-{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:26:41Z","event_type":"closed","id":329,"issue_id":"sl-wisp-nzypr","new_value":"patrol cycle complete: Patrol 5: No active polecats. Deacon alive. System idle.","old_value":""}
-{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:29:01Z","event_type":"closed","id":330,"issue_id":"sl-wisp-xoldw","new_value":"patrol cycle complete: Queue empty. Backoff tracking fix applied (sl-sling-refinery bead ID). Now cycling at 5m backoff correctly. No merges.","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:48:53Z","event_type":"closed","id":352,"issue_id":"sl-wisp-i990s","new_value":"Closed","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:04Z","event_type":"closed","id":353,"issue_id":"sl-wisp-qhiew","new_value":"patrol cycle complete: Queue empty. 0 branches merged. Inbox clean (archived 1 stale handoff). Auto-land disabled.","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:06Z","event_type":"closed","id":354,"issue_id":"sl-wisp-qv05o","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":355,"issue_id":"sl-wisp-919r","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":356,"issue_id":"sl-wisp-ctn91","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":357,"issue_id":"sl-wisp-7nn7y","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":358,"issue_id":"sl-wisp-89rfa","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":359,"issue_id":"sl-wisp-t88uu","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":360,"issue_id":"sl-wisp-9hqxb","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":361,"issue_id":"sl-wisp-tekfk","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:09Z","event_type":"closed","id":362,"issue_id":"sl-wisp-s0klw","new_value":"Orphaned witness patrol wisp from abandoned session","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:12Z","event_type":"closed","id":363,"issue_id":"sl-wisp-q302y","new_value":"Polecat scan complete: no active polecats. Deacon alive, refinery healthy (8h uptime, queue empty). Cleaned 3 orphaned witness patrol chains.","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:16Z","event_type":"closed","id":364,"issue_id":"sl-wisp-qzo5r","new_value":"Closed","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:21Z","event_type":"closed","id":365,"issue_id":"sl-wisp-411ed","new_value":"Closed","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:22Z","event_type":"closed","id":366,"issue_id":"sl-wisp-dw2f5","new_value":"Closed","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:24Z","event_type":"closed","id":367,"issue_id":"sl-wisp-1reog","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:24Z","event_type":"closed","id":368,"issue_id":"sl-wisp-ttr75","new_value":"Loop decision: patrol_count=10, no extraordinary actions. All clear.","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:24Z","event_type":"closed","id":369,"issue_id":"sl-wisp-0to7c","new_value":"all steps complete","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:32Z","event_type":"closed","id":370,"issue_id":"sl-wisp-tet5r","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:37Z","event_type":"closed","id":371,"issue_id":"sl-wisp-0dgzb","new_value":"Inbox empty. No lifecycle requests or notifications.","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:37Z","event_type":"closed","id":372,"issue_id":"sl-wisp-9s4gv","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:42Z","event_type":"closed","id":373,"issue_id":"sl-wisp-g63xv","new_value":"No active polecats. Deacon alive. All clear.","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:49:44Z","event_type":"closed","id":374,"issue_id":"sl-wisp-igld3","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:45Z","event_type":"closed","id":375,"issue_id":"sl-wisp-r61uo","new_value":"Loop: patrol_count=11, no extraordinary actions.","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:49:45Z","event_type":"closed","id":376,"issue_id":"sl-wisp-ho9v7","new_value":"all steps complete","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:50:00Z","event_type":"closed","id":377,"issue_id":"sl-wisp-tt6jr","new_value":"Closed","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:50:09Z","event_type":"closed","id":378,"issue_id":"sl-wisp-0j3i1","new_value":"Closed","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:50:28Z","event_type":"closed","id":379,"issue_id":"sl-wisp-ka4v5","new_value":"Inbox empty.","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:50:28Z","event_type":"closed","id":380,"issue_id":"sl-wisp-ltpfc","new_value":"No active polecats. Deacon alive.","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:50:31Z","event_type":"closed","id":381,"issue_id":"sl-wisp-ocqbu","new_value":"Loop: patrol_count=12.","old_value":""}
+{"actor":"sling/witness","comment":"","created_at":"2026-03-01T22:50:31Z","event_type":"closed","id":382,"issue_id":"sl-wisp-h2czk","new_value":"all steps complete","old_value":""}
+{"actor":"sling/refinery","comment":"","created_at":"2026-03-01T22:50:55Z","event_type":"closed","id":383,"issue_id":"sl-wisp-nsxln","new_value":"patrol cycle complete: Empty cycle: merge queue empty, inbox clean, no integration branches to land. 0 merges, 0 conflicts, 0 escalations.","old_value":""}
