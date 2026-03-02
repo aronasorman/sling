@@ -8,6 +8,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/aronasorman/sling/internal/agent"
+	"github.com/aronasorman/sling/internal/notify"
 	"github.com/aronasorman/sling/internal/bead"
 	"github.com/aronasorman/sling/internal/worktree"
 )
@@ -555,3 +557,89 @@ func containsAny(s string, subs ...string) bool {
 
 // unused import suppression — worktree is imported for type assertions in stubs
 var _ = worktree.WorktreePath
+
+// TestExecuteEpic_Escalation: all attempts fail → epic gets sling:escalated, not sling:failed.
+func TestExecuteEpic_Escalation(t *testing.T) {
+	origBeadShow := execBeadShow
+	origBeadList := execBeadList
+	origWorktreeAdd := execWorktreeAdd
+	origBeadSwap := execBeadSwapLabel
+	origAgentRun := execAgentRun
+	origBuildGate := execRunBuildGate
+	origHolistic := execRunEpicHolisticReview
+	origClaim := execBeadClaimAndLabel
+	origWorktreeUpdate := execBeadUpdateWorktree
+	defer func() {
+		execBeadShow = origBeadShow
+		execBeadList = origBeadList
+		execWorktreeAdd = origWorktreeAdd
+		execBeadSwapLabel = origBeadSwap
+		execAgentRun = origAgentRun
+		execRunBuildGate = origBuildGate
+		execRunEpicHolisticReview = origHolistic
+		execBeadClaimAndLabel = origClaim
+		execBeadUpdateWorktree = origWorktreeUpdate
+	}()
+
+	epicBead := &bead.Bead{ID: "epic-esc", Title: "escalation epic", Labels: []string{bead.LabelReady}}
+	sub1 := &bead.Bead{ID: "sub-1", ParentID: "epic-esc", Labels: []string{bead.LabelReady}}
+
+	execBeadShow = func(id string) (*bead.Bead, error) {
+		if id == "epic-esc" {
+			return epicBead, nil
+		}
+		return sub1, nil
+	}
+	// Return sub-bead for any label query.
+	execBeadList = func(label string) ([]*bead.Bead, error) {
+		return []*bead.Bead{sub1}, nil
+	}
+	// Claim always succeeds.
+	execBeadClaimAndLabel = func(id, add, remove string) error { return nil }
+	execBeadUpdateWorktree = func(id, path string) error { return nil }
+
+	execWorktreeAdd = func(root, id string) (*worktree.Workspace, error) {
+		return &worktree.Workspace{Path: t.TempDir(), Branch: "sling/" + id, BeadID: id}, nil
+	}
+
+	var epicLabel string
+	execBeadSwapLabel = func(id, label string) error {
+		if id == "epic-esc" {
+			epicLabel = label
+		}
+		return nil
+	}
+
+	agentCalls := 0
+	execAgentRun = func(opts agent.RunOptions) error {
+		agentCalls++
+		return fmt.Errorf("agent failed on attempt %d", agentCalls)
+	}
+	execRunBuildGate = func(wtPath string, cfg BuildGateConfig) (*BuildGateResult, error) {
+		t.Error("build gate should not be called when agent fails")
+		return nil, nil
+	}
+	execRunEpicHolisticReview = func(epicID, wtPath string, opts EpicHolisticReviewOptions) error {
+		t.Error("holistic review should not be called when agent fails")
+		return nil
+	}
+
+	// Notifier: use notify.New with dummy creds. Send() will fail silently
+	// (error discarded). We verify escalation via the label.
+	notifier := notify.New(true, "fake-token", "fake-chat")
+	result, _ := ExecuteEpic(EpicExecuteOptions{
+		EpicID:      "epic-esc",
+		MaxAttempts: 2,
+		Notifier:    notifier,
+	})
+
+	if result.Succeeded {
+		t.Error("expected Succeeded=false")
+	}
+	if agentCalls != 2 {
+		t.Errorf("expected 2 agent calls (MaxAttempts=2), got %d", agentCalls)
+	}
+	if epicLabel != bead.LabelEscalated {
+		t.Errorf("expected epic label %q, got %q", bead.LabelEscalated, epicLabel)
+	}
+}
