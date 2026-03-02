@@ -37,12 +37,26 @@ func run(args ...string) ([]byte, error) {
 // Create creates a new bead and returns its ID.
 // title is required; body, parentID are optional (pass "" to omit).
 func Create(title, body, parentID string, labels []string) (string, error) {
+	return createWithRig("", title, body, parentID, labels)
+}
+
+// CreateInRig creates a new bead in a specific gastown rig and returns its ID.
+// rig is the rig name (e.g. "sling"); title is required; body, parentID are optional.
+func CreateInRig(rig, title, body, parentID string, labels []string) (string, error) {
+	return createWithRig(rig, title, body, parentID, labels)
+}
+
+// createWithRig is the shared implementation for Create and CreateInRig.
+func createWithRig(rig, title, body, parentID string, labels []string) (string, error) {
 	args := []string{"create", "--json", "--title", title}
 	if body != "" {
 		args = append(args, "--body", body)
 	}
 	if parentID != "" {
 		args = append(args, "--parent", parentID)
+	}
+	if rig != "" {
+		args = append(args, "--rig", rig)
 	}
 	for _, l := range labels {
 		args = append(args, "--label", l)

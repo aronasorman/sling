@@ -17,10 +17,20 @@ type ExpandResult struct {
 	TopoLayers   [][]string     // bead IDs in topological order; TopoLayers[0] = roots
 }
 
+// ExpandOpts holds optional parameters for Expand.
+type ExpandOpts struct {
+	// Rig is the gastown rig name to create child beads in (e.g. "sling").
+	// When empty, beads are created using default bd routing.
+	Rig string
+}
+
 // package-level function variables allow tests to inject stubs without the bd binary.
 var (
 	expandBeadCreate = func(title, body, parentID string, labels []string) (string, error) {
 		return bead.Create(title, body, parentID, labels)
+	}
+	expandBeadCreateInRig = func(rig, title, body, parentID string, labels []string) (string, error) {
+		return bead.CreateInRig(rig, title, body, parentID, labels)
 	}
 	expandBeadSetDependsOn = func(id string, deps []string) error {
 		return bead.SetDependsOn(id, deps)
@@ -135,7 +145,25 @@ func TopoSort(beads []PlanBead, idByIndex map[int]string) (layers [][]string, er
 // In that case no sling:ready promotions are performed and no depends_on metadata
 // is written (all created beads remain sling:planned; callers should close or
 // delete them).
-func Expand(plan *Plan, epicID string) (*ExpandResult, error) {
+func Expand(plan *Plan, epicID string, opts ...ExpandOpts) (*ExpandResult, error) {
+	opt := ExpandOpts{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	// When a rig is specified, use expandBeadCreateInRig so beads land in the
+	// correct gastown rig. Both variables are package-level and can be stubbed
+	// in tests without requiring the bd binary.
+	var createFn func(title, body, parentID string, labels []string) (string, error)
+	if opt.Rig != "" {
+		rig := opt.Rig
+		createFn = func(title, body, parentID string, labels []string) (string, error) {
+			return expandBeadCreateInRig(rig, title, body, parentID, labels)
+		}
+	} else {
+		createFn = expandBeadCreate
+	}
+
 	result := &ExpandResult{
 		EpicID:       epicID,
 		BeadsByIndex: make(map[int]string),
@@ -143,7 +171,7 @@ func Expand(plan *Plan, epicID string) (*ExpandResult, error) {
 
 	// Pass 1: create all beads as sling:planned.
 	for _, pb := range plan.Beads {
-		id, err := expandBeadCreate(pb.Title, pb.Body, epicID, []string{bead.LabelPlanned})
+		id, err := createFn(pb.Title, pb.Body, epicID, []string{bead.LabelPlanned})
 		if err != nil {
 			return nil, fmt.Errorf("expand: create bead %q: %w", pb.Title, err)
 		}

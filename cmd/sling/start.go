@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,14 +16,29 @@ import (
 	"github.com/aronasorman/sling/internal/pipeline"
 )
 
+var startRig string
+
 var startCmd = &cobra.Command{
-	Use:   "start <issue-ref>",
-	Short: "Fetch an issue, create an epic bead, plan and expand it into child beads",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runStart,
+	Use:   "start <issue-ref-or-title>",
+	Short: "Fetch an issue (or expand a title), create an epic bead, plan and expand it into child beads",
+	Long: `Start creates an epic bead and decomposes it into child beads via the Planner.
+
+Normal mode: <issue-ref> is a GitHub issue number, Linear ID, or similar.
+  sling start 42
+  sling start LIN-123
+
+Gastown mode: when run inside a gastown workspace (or with --rig), the argument
+is treated as a plain title. No external issue tracker is required.
+  sling start "add user authentication"
+  sling start --rig sling "add user authentication"
+
+In gastown mode, beads are created in the specified rig.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runStart,
 }
 
 func init() {
+	startCmd.Flags().StringVar(&startRig, "rig", "", "Gastown rig name to create beads in (auto-detected if inside a gastown workspace)")
 	rootCmd.AddCommand(startCmd)
 }
 
@@ -38,31 +54,44 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve GitHub repo from config or git remote.
-	githubRepo := cfg.Project.GitHubRepo
-	if githubRepo == "" {
-		detected, err := detectGitHubRepo(cwd)
-		if err != nil {
-			fmt.Printf("Warning: %v\n", err)
-		} else {
-			githubRepo = detected
+	// Determine rig: explicit --rig flag overrides auto-detection.
+	rig := startRig
+	if rig == "" {
+		rig = detectGastownRig(cwd)
+	}
+
+	var src issue.Source
+	if rig != "" {
+		// Gastown mode: treat the argument as a plain title, no tracker needed.
+		fmt.Printf("Gastown mode: rig=%s, title=%q\n", rig, ref)
+		src = issue.NewDescriptionSource(ref, "")
+	} else {
+		// Normal mode: resolve issue from the configured tracker.
+		githubRepo := cfg.Project.GitHubRepo
+		if githubRepo == "" {
+			detected, err := detectGitHubRepo(cwd)
+			if err != nil {
+				fmt.Printf("Warning: %v\n", err)
+			} else {
+				githubRepo = detected
+			}
 		}
-	}
 
-	// Fail fast: if the issue source is GitHub we must have a repo slug.
-	if cfg.Project.IssueSource == "github" && githubRepo == "" {
-		return fmt.Errorf("start: github_repo is required when issue_source=github; set it in sling.toml or ensure the git remote is a GitHub URL")
-	}
+		// Fail fast: if the issue source is GitHub we must have a repo slug.
+		if cfg.Project.IssueSource == "github" && githubRepo == "" {
+			return fmt.Errorf("start: github_repo is required when issue_source=github; set it in sling.toml or ensure the git remote is a GitHub URL")
+		}
 
-	src, err := issue.DetectSource(cfg.Project.IssueSource, ref, cfg.GitHubToken, cfg.LinearToken, githubRepo)
-	if err != nil {
-		return err
+		src, err = issue.DetectSource(cfg.Project.IssueSource, ref, cfg.GitHubToken, cfg.LinearToken, githubRepo)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx := context.Background()
 
 	// Phase 1: Intake.
-	result, err := pipeline.Intake(ctx, ref, src)
+	result, err := pipeline.Intake(ctx, ref, src, pipeline.IntakeOpts{Rig: rig})
 	if err != nil {
 		return err
 	}
@@ -76,7 +105,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Plan: %d beads\n", len(plan.Beads))
 
 	// Phase 3: Expansion.
-	expandResult, err := pipeline.Expand(plan, result.EpicID)
+	expandResult, err := pipeline.Expand(plan, result.EpicID, pipeline.ExpandOpts{Rig: rig})
 	if err != nil {
 		return fmt.Errorf("expansion failed: %w", err)
 	}
@@ -84,6 +113,30 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nDone. Epic bead: %s\nRun `sling next` to start executing.\n", result.EpicID)
 	return nil
+}
+
+// detectGastownRig walks up from cwd looking for a gastown rig config.json.
+// Returns the rig name if found, empty string if not in a gastown workspace.
+func detectGastownRig(cwd string) string {
+	dir := cwd
+	for {
+		configPath := filepath.Join(dir, "config.json")
+		if data, err := os.ReadFile(configPath); err == nil {
+			var rigConfig struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(data, &rigConfig) == nil && rigConfig.Type == "rig" && rigConfig.Name != "" {
+				return rigConfig.Name
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
 }
 
 // detectGitHubRepo tries to infer "owner/repo" from the git remote URL.
