@@ -5,3 +5,8 @@ dist/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Gas Town (added by gt)
+.runtime/
+.claude/commands/
+.logs/
