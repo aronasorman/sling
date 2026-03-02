@@ -1,0 +1,8 @@
+{"issue_id":"sl-rig-sling","label":"gt:rig"}
+{"issue_id":"sl-sling-polecat-jasper","label":"gt:agent"}
+{"issue_id":"sl-sling-polecat-obsidian","label":"gt:agent"}
+{"issue_id":"sl-sling-polecat-quartz","label":"gt:agent"}
+{"issue_id":"sl-sling-refinery","label":"backoff-until:1772430418"}
+{"issue_id":"sl-sling-refinery","label":"gt:agent"}
+{"issue_id":"sl-sling-refinery","label":"idle:6"}
+{"issue_id":"sl-sling-witness","label":"gt:agent"}
