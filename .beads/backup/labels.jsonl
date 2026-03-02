@@ -5,7 +5,6 @@
 {"issue_id":"sling-work-96f.4","label":"sling:review-pending"}
 {"issue_id":"sling-work-mvi","label":"sling:planned"}
 {"issue_id":"sling-work-mvi.2","label":"sling:review-pending"}
-{"issue_id":"sling-work-mvi.3","label":"sling:executing"}
-{"issue_id":"sling-work-mvi.4","label":"sling:planned"}
-{"issue_id":"sling-work-mvi.5","label":"sling:planned"}
+{"issue_id":"sling-work-mvi.4","label":"sling:failed"}
+{"issue_id":"sling-work-mvi.5","label":"sling:executing"}
 {"issue_id":"sling-work-mvi.6","label":"sling:planned"}
