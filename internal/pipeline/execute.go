@@ -1,16 +1,112 @@
 package pipeline
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aronasorman/sling/internal/agent"
 	"github.com/aronasorman/sling/internal/bead"
 	"github.com/aronasorman/sling/internal/notify"
 	"github.com/aronasorman/sling/internal/worktree"
 )
+
+// BuildGateConfig configures the build and test gate.
+type BuildGateConfig struct {
+	// BuildCmd is the shell command run first. Empty = skip.
+	BuildCmd string
+	// TestCmd is the shell command run after a successful build. Empty = skip.
+	TestCmd string
+	// Timeout is the per-command timeout. Zero means 10 minutes.
+	Timeout time.Duration
+}
+
+// BuildGateResult holds the outcome of RunBuildGate.
+type BuildGateResult struct {
+	// BuildPassed is true when BuildCmd exited 0 (or was skipped).
+	BuildPassed bool
+	// TestPassed is true when TestCmd exited 0 (or was skipped).
+	TestPassed bool
+	// BuildOutput is the combined stdout+stderr of BuildCmd.
+	BuildOutput string
+	// TestOutput is the combined stdout+stderr of TestCmd.
+	TestOutput string
+	// Skipped is true when both BuildCmd and TestCmd are empty strings.
+	Skipped bool
+}
+
+// RunBuildGate runs the build and test commands inside wtPath.
+// It inherits the full environment of the current process (including PATH)
+// so that tools like go, npm, etc. are found without explicit configuration.
+func RunBuildGate(wtPath string, cfg BuildGateConfig) (*BuildGateResult, error) {
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 10 * time.Minute
+	}
+
+	result := &BuildGateResult{}
+
+	if cfg.BuildCmd == "" && cfg.TestCmd == "" {
+		result.Skipped = true
+		result.BuildPassed = true
+		result.TestPassed = true
+		return result, nil
+	}
+
+	if cfg.BuildCmd == "" {
+		result.BuildPassed = true
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", cfg.BuildCmd)
+		cmd.Dir = wtPath
+		cmd.Env = os.Environ()
+		var buf bytes.Buffer
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		err := cmd.Run()
+		result.BuildOutput = buf.String()
+		if err != nil {
+			result.BuildPassed = false
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("run build command %q: timed out after %s", cfg.BuildCmd, cfg.Timeout)
+			}
+			return result, nil
+		}
+		result.BuildPassed = true
+	}
+
+	if cfg.TestCmd == "" {
+		result.TestPassed = true
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", cfg.TestCmd)
+		cmd.Dir = wtPath
+		cmd.Env = os.Environ()
+		var buf bytes.Buffer
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		err := cmd.Run()
+		result.TestOutput = buf.String()
+		if err != nil {
+			result.TestPassed = false
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("run test command %q: timed out after %s", cfg.TestCmd, cfg.Timeout)
+			}
+			return result, nil
+		}
+		result.TestPassed = true
+	}
+
+	return result, nil
+}
 
 // executeBeadList is an injectable stub for bead.List used by ClaimNextReady.
 var executeBeadList = func(label string) ([]*bead.Bead, error) {

@@ -60,11 +60,9 @@ func Run(opts RunOptions) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	if len(opts.Env) > 0 {
-		cmd.Env = os.Environ()
-		for k, v := range opts.Env {
-			cmd.Env = append(cmd.Env, k+"="+v)
-		}
+	cmd.Env = os.Environ()
+	for k, v := range opts.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
 	if err := cmd.Run(); err != nil {
