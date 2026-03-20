@@ -47,4 +47,4 @@ jobs:
         with:
           name: sling
           path: sling
-          retention-days: 30
+          retention-days: 3
